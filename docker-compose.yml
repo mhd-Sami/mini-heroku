@@ -1,0 +1,50 @@
+version: '3.8'
+
+services:
+  traefik:
+    image: traefik:v2.10
+    container_name: mini-heroku-traefik
+    command:
+      - "--api.insecure=true"
+      - "--providers.docker=true"
+      - "--providers.docker.exposedbydefault=false"
+      - "--entrypoints.web.address=:80"
+    ports:
+      - "80:80"
+      - "8080:8080" # Traefik Web UI (insecure dashboard)
+    volumes:
+      - "/var/run/docker.sock:/var/run/docker.sock:ro"
+    networks:
+      - mini-heroku-net
+    restart: always
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: mini-heroku-backend
+    volumes:
+      - "/var/run/docker.sock:/var/run/docker.sock"
+      - backend-db:/app/data
+      - ./frontend:/app/frontend
+    environment:
+      - DATABASE_URL=sqlite:////app/data/mini_heroku.db
+    networks:
+      - mini-heroku-net
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.backend.rule=Host(`api.localhost`) || Host(`localhost`)"
+      - "traefik.http.routers.backend.entrypoints=web"
+      - "traefik.http.services.backend.loadbalancer.server.port=8000"
+    ports:
+      - "8000:8000"
+    depends_on:
+      - traefik
+    restart: always
+
+networks:
+  mini-heroku-net:
+    name: mini-heroku-net
+
+volumes:
+  backend-db:
