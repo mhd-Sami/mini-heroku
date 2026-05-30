@@ -828,7 +828,7 @@ input:focus {
   border-radius: var(--radius-lg);
   border: 1px solid var(--color-bg-alt);
   box-shadow: var(--shadow-md);
-  padding: 2.5rem;
+  padding: 2rem;
   display: flex;
   flex-direction: column;
   gap: 2rem;
@@ -840,6 +840,10 @@ input:focus {
   gap: 1.25rem;
   border-bottom: 1px solid var(--color-bg-alt);
   padding-bottom: 1.5rem;
+}
+
+#btn-back-dashboard {
+  align-self: flex-start;
 }
 
 .details-title-row {
