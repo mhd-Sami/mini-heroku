@@ -159,7 +159,7 @@ def deploy_app_task(
         labels = {
             "traefik.enable": "true",
             "traefik.docker.network": "mini-heroku-net",
-            f"traefik.http.routers.{route_name}.rule": f"Host(`{app_name}.localhost`)",
+            f"traefik.http.routers.{route_name}.rule": f'Host("{app_name}.localhost")',
             f"traefik.http.routers.{route_name}.entrypoints": "web",
             f"traefik.http.services.{route_name}.loadbalancer.server.port": str(port)
         }
@@ -245,6 +245,15 @@ def get_diagnose():
             "networks": networks,
             "containers": containers
         }
+    except Exception as e:
+        return {"error": str(e)}
+
+@app.get("/api/traefik-logs")
+def get_traefik_logs():
+    try:
+        client = docker.from_env()
+        traefik = client.containers.get("mini-heroku-traefik")
+        return {"logs": traefik.logs(tail=200).decode("utf-8", errors="ignore")}
     except Exception as e:
         return {"error": str(e)}
 
