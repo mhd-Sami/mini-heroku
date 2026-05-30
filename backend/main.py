@@ -153,12 +153,15 @@ def deploy_app_task(
         # 5. Launch Container with Traefik tags
         log_message(app_name, "Docker build completed. Launching container...")
 
+        # Traefik router/service identifiers in label keys must be strictly alphanumeric
+        route_name = re.sub(r'[^a-zA-Z0-9]', '', app_name)
+
         labels = {
             "traefik.enable": "true",
             "traefik.docker.network": "mini-heroku-net",
-            f"traefik.http.routers.{app_name}.rule": f"Host(`{app_name}.localhost`)",
-            f"traefik.http.routers.{app_name}.entrypoints": "web",
-            f"traefik.http.services.{app_name}.loadbalancer.server.port": str(port)
+            f"traefik.http.routers.{route_name}.rule": f"Host(`{app_name}.localhost`)",
+            f"traefik.http.routers.{route_name}.entrypoints": "web",
+            f"traefik.http.services.{route_name}.loadbalancer.server.port": str(port)
         }
 
         # Convert float CPU to nano_cpus
