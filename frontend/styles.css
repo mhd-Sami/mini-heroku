@@ -757,8 +757,10 @@ input:focus {
 
 .modal-body {
   padding: 1.5rem;
-  overflow-y: auto;
+  overflow: hidden;
   flex: 1;
+  display: flex;
+  flex-direction: column;
   background-color: #0f172a; /* Slate 900 for dark CLI look */
 }
 
@@ -770,7 +772,8 @@ input:focus {
   white-space: pre-wrap;
   word-break: break-all;
   overflow-y: auto;
-  min-height: 350px;
+  flex: 1;
+  height: 450px;
   display: flex;
   flex-direction: column;
   gap: 0.25rem;

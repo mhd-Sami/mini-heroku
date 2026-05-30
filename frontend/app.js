@@ -25,6 +25,7 @@ const modalAppTitle = document.getElementById('modal-app-title');
 const terminalConsole = document.getElementById('terminal-console');
 const btnCloseModal = document.getElementById('btn-close-modal');
 const btnModalClear = document.getElementById('btn-modal-clear');
+const btnModalCopy = document.getElementById('btn-modal-copy');
 
 const metricTotalApps = document.getElementById('metric-total-apps');
 const metricRunningApps = document.getElementById('metric-running-apps');
@@ -422,6 +423,26 @@ document.querySelector('.modal-backdrop').addEventListener('click', closeModal);
 // Clear console
 btnModalClear.addEventListener('click', () => {
   terminalConsole.innerHTML = '';
+});
+
+// Copy logs to clipboard
+btnModalCopy.addEventListener('click', () => {
+  const logLines = Array.from(terminalConsole.children).map(child => child.textContent);
+  const fullLog = logLines.join('\n');
+  
+  navigator.clipboard.writeText(fullLog).then(() => {
+    const originalText = btnModalCopy.textContent;
+    btnModalCopy.textContent = 'Copied!';
+    btnModalCopy.style.borderColor = 'var(--color-success)';
+    btnModalCopy.style.color = 'var(--color-success)';
+    setTimeout(() => {
+      btnModalCopy.textContent = originalText;
+      btnModalCopy.style.borderColor = '';
+      btnModalCopy.style.color = '';
+    }, 2000);
+  }).catch(err => {
+    console.error('Could not copy logs: ', err);
+  });
 });
 
 /* ==========================================================================
