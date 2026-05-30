@@ -107,7 +107,7 @@ def deploy_app_task(
             raise Exception("No Dockerfile found in root of repository. Dockerfile is required.")
 
         # 3. Docker build
-        log_message(app_name, "Dockerfile found. Starting Docker image build...")
+        log_message(app_name, "Dockerfile found. Starting BuildKit Docker image build...")
         client = docker.from_env()
 
         # Connect network check
@@ -116,12 +116,30 @@ def deploy_app_task(
         except docker.errors.NotFound:
             client.networks.create("mini-heroku-net", driver="bridge")
 
-        # Stream build progress
-        for chunk in client.api.build(path=clone_dir, tag=app_name, rm=True, decode=True):
-            if 'stream' in chunk:
-                log_message(app_name, chunk['stream'])
-            elif 'error' in chunk:
-                raise Exception(chunk['error'])
+        # Use Docker CLI subprocess to run build with BuildKit enabled, supporting platform-specific variables
+        build_env = os.environ.copy()
+        build_env["DOCKER_BUILDKIT"] = "1"
+        
+        process = subprocess.Popen(
+            ["docker", "build", "-t", app_name, "."],
+            cwd=clone_dir,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+            bufsize=1,
+            env=build_env
+        )
+
+        while True:
+            line = process.stdout.readline()
+            if not line and process.poll() is not None:
+                break
+            if line:
+                log_message(app_name, line)
+
+        return_code = process.wait()
+        if return_code != 0:
+            raise Exception(f"Docker build failed with exit code {return_code}")
 
         # 4. Stop & remove existing container if it exists
         try:

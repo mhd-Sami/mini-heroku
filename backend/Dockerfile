@@ -1,8 +1,11 @@
 FROM python:3.10-slim
 
-# Install system dependencies, including git
+# Install system dependencies, including git, curl, and docker CLI
 RUN apt-get update && apt-get install -y --no-install-recommends \
     git \
+    curl \
+    ca-certificates \
+    && curl -fsSL https://download.docker.com/linux/static/stable/x86_64/docker-24.0.7.tgz | tar -xz -C /usr/local/bin --strip-components=1 docker/docker \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
