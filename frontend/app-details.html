@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Mini-Heroku Deployment Details. View logs, manage container lifecycle, and verify environment parameters.">
+  <title>Mini-Heroku | Deployment Specifications</title>
+  <!-- Google Fonts: Inter and Outfit -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <!-- Stylesheets -->
+  <link rel="stylesheet" href="css/styles.css">
+  <!-- Auth Navigation Guard & Common Header Renderer -->
+  <script src="js/nav.js"></script>
+</head>
+<body>
+  <!-- Header mounted dynamically via nav.js -->
+  <header class="app-header" id="app-header"></header>
+
+  <main class="dashboard-container">
+    <!-- Back to Apps list -->
+    <div style="margin-bottom: 0.5rem;">
+      <a href="apps.html" class="btn btn-secondary btn-sm">&larr; Back to Deployments</a>
+    </div>
+
+    <!-- Detailed Application View -->
+    <section id="details-view" class="details-view" style="display: block;">
+      <div class="details-header">
+        <div class="details-title-row">
+          <div class="details-title-group">
+            <h2 id="details-app-name">Loading...</h2>
+            <span class="app-card-domain">
+              <a href="#" id="details-app-link" target="_blank">domain.localhost</a>
+            </span>
+          </div>
+          <span id="details-status-badge" class="status-badge">
+            <span class="pulse-dot"></span>
+            <span id="details-status-text" class="status-text">LOADING</span>
+          </span>
+        </div>
+      </div>
+
+      <div class="details-grid">
+        <!-- Live Metrics Panel -->
+        <div class="details-subcard metrics-panel">
+          <h3>Live Resource Metrics</h3>
+          <div class="details-stats-container">
+            <div class="details-stat-box">
+              <div class="stat-label-group">
+                <span class="stat-name">CPU Utilization</span>
+                <span class="stat-val" id="details-cpu-val">0%</span>
+              </div>
+              <div class="stat-bar-track">
+                <div class="stat-bar-fill" id="details-cpu-bar" style="width: 0%"></div>
+              </div>
+            </div>
+            <div class="details-stat-box" style="margin-top: 1rem;">
+              <div class="stat-label-group">
+                <span class="stat-name">Memory Allocation</span>
+                <span class="stat-val" id="details-mem-val">0MB / 0MB</span>
+              </div>
+              <div class="stat-bar-track">
+                <div class="stat-bar-fill" id="details-mem-bar" style="width: 0%"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Configurations Panel -->
+        <div class="details-subcard config-panel">
+          <h3>Application Configuration</h3>
+          <div class="config-info-list">
+            <div><strong>Git Source:</strong> <span id="details-git-url">Loading...</span></div>
+            <div><strong>Target Port:</strong> <span id="details-port">--</span></div>
+            <div><strong>CPU Cap:</strong> <span id="details-cpu-limit">--</span></div>
+            <div><strong>Memory Cap:</strong> <span id="details-mem-limit">--</span></div>
+            <div><strong>Deployed On:</strong> <span id="details-created-at">--</span></div>
+          </div>
+        </div>
+
+        <!-- Env Variables Panel -->
+        <div class="details-subcard env-panel">
+          <h3>Active Environment Variables</h3>
+          <div id="details-env-list" class="details-env-list">
+            <!-- Render key-values -->
+          </div>
+        </div>
+
+        <!-- Application Lifecycle Controls -->
+        <div class="details-subcard actions-panel">
+          <h3>Lifecycle Operations</h3>
+          <div class="details-actions-grid">
+            <button class="btn btn-secondary btn-sm" id="btn-details-start">Start App</button>
+            <button class="btn btn-secondary btn-sm" id="btn-details-stop">Stop App</button>
+            <button class="btn btn-secondary btn-sm" id="btn-details-restart">Restart App</button>
+            <button class="btn btn-danger-outline btn-sm" id="btn-details-delete">Delete App</button>
+          </div>
+        </div>
+
+        <!-- Integrated Console Logs -->
+        <div class="details-subcard logs-panel">
+          <div class="logs-panel-header">
+            <h3>Live Application Logs</h3>
+            <button type="button" id="btn-details-copy-logs" class="btn btn-secondary btn-sm">Copy Logs</button>
+          </div>
+          <div class="details-terminal-wrapper" style="background-color: #0f172a; padding: 1rem; border-radius: var(--radius-md); margin-top: 0.5rem;">
+            <div id="details-terminal" class="terminal-console" style="min-height: 250px; max-height: 350px;">
+              <!-- Real-time logs -->
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="app-footer">
+    <div class="footer-container">
+      <p>Mini-Heroku PaaS • Powered by Traefik, Docker, and FastAPI</p>
+    </div>
+  </footer>
+
+  <script type="module" src="js/app-details.js"></script>
+</body>
+</html>

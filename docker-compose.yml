@@ -30,6 +30,8 @@ services:
       - ./frontend:/app/frontend
     environment:
       - DATABASE_URL=sqlite:////app/data/mini_heroku.db
+    env_file:
+      - .env
     networks:
       - mini-heroku-net
     labels:
