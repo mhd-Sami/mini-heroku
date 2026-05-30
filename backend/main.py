@@ -222,6 +222,29 @@ def startup_event():
     except Exception as e:
         print(f"Warning: could not initialize Docker network: {e}")
 
+@app.get("/api/diagnose")
+def get_diagnose():
+    try:
+        client = docker.from_env()
+        networks = [
+            {"name": net.name, "id": net.id, "driver": net.attrs.get("Driver")} 
+            for net in client.networks.list()
+        ]
+        containers = []
+        for c in client.containers.list():
+            containers.append({
+                "name": c.name,
+                "status": c.status,
+                "networks": list(c.attrs['NetworkSettings']['Networks'].keys()),
+                "labels": {k: v for k, v in c.labels.items() if 'traefik' in k}
+            })
+        return {
+            "networks": networks,
+            "containers": containers
+        }
+    except Exception as e:
+        return {"error": str(e)}
+
 @app.get("/api/apps")
 def list_apps(db: Session = Depends(get_db)):
     deployments = db.query(Deployment).all()

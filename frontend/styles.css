@@ -162,6 +162,12 @@ a:hover {
   gap: 2rem;
 }
 
+#dashboard-view-wrapper {
+  display: flex;
+  flex-direction: column;
+  gap: 2rem;
+}
+
 /* Metrics Grid Banner */
 .metrics-grid {
   display: grid;

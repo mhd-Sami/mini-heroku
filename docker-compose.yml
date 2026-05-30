@@ -8,6 +8,7 @@ services:
       - "--api.insecure=true"
       - "--providers.docker=true"
       - "--providers.docker.exposedbydefault=false"
+      - "--providers.docker.network=mini-heroku-net"
       - "--entrypoints.web.address=:80"
     ports:
       - "80:80"
