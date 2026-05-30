@@ -55,6 +55,7 @@ const detailsEnvList = document.getElementById('details-env-list');
 const detailsTerminal = document.getElementById('details-terminal');
 
 const btnDetailsCopyLogs = document.getElementById('btn-details-copy-logs');
+const btnDetailsStart = document.getElementById('btn-details-start');
 const btnDetailsRestart = document.getElementById('btn-details-restart');
 const btnDetailsStop = document.getElementById('btn-details-stop');
 const btnDetailsDelete = document.getElementById('btn-details-delete');
@@ -192,6 +193,7 @@ function renderDashboard() {
 
       <div class="app-actions">
         <button class="btn btn-secondary btn-sm btn-logs" onclick="showLogs('${app.app_name}')">Logs</button>
+        <button class="btn btn-secondary btn-sm" onclick="startApp('${app.app_name}')" ${app.status === 'running' ? 'disabled' : ''}>Start</button>
         <button class="btn btn-secondary btn-sm" onclick="restartApp('${app.app_name}')" ${app.status !== 'running' ? 'disabled' : ''}>Restart</button>
         <button class="btn btn-secondary btn-sm" onclick="stopApp('${app.app_name}')" ${app.status !== 'running' ? 'disabled' : ''}>Stop</button>
         <button class="btn btn-danger-outline btn-sm btn-delete" onclick="deleteApp('${app.app_name}')">Delete</button>
@@ -208,6 +210,16 @@ function renderDashboard() {
 /* ==========================================================================
    Container Lifecycle Control Actions
    ========================================================================== */
+
+async function startApp(appName) {
+  try {
+    const res = await fetch(`${API_BASE}/api/apps/${appName}/start`, { method: 'POST' });
+    if (!res.ok) throw new Error('Start request failed');
+    fetchDeployments();
+  } catch (err) {
+    alert(`Error starting app: ${err.message}`);
+  }
+}
 
 async function stopApp(appName) {
   try {
@@ -326,6 +338,10 @@ async function pollAppStats(appName) {
         if (detailsCpuBar) detailsCpuBar.style.width = '0%';
         if (detailsMemVal) detailsMemVal.textContent = '0MB / 0MB';
         if (detailsMemBar) detailsMemBar.style.width = '0%';
+        
+        btnDetailsStart.disabled = false;
+        btnDetailsRestart.disabled = true;
+        btnDetailsStop.disabled = true;
       }
     }
   } catch (err) {
@@ -554,6 +570,27 @@ async function openAppDetails(appName) {
   }
 
   // Bind Actions
+  btnDetailsStart.disabled = app.status === 'running';
+  btnDetailsRestart.disabled = app.status !== 'running';
+  btnDetailsStop.disabled = app.status !== 'running';
+
+  btnDetailsStart.onclick = async () => {
+    btnDetailsStart.disabled = true;
+    btnDetailsStart.textContent = 'Starting...';
+    try {
+      await startApp(appName);
+      setTimeout(async () => {
+        await fetchDeployments();
+        openAppDetails(appName);
+      }, 1000);
+    } catch (e) {
+      alert(e.message);
+    } finally {
+      btnDetailsStart.disabled = false;
+      btnDetailsStart.textContent = 'Start App';
+    }
+  };
+
   btnDetailsRestart.onclick = async () => {
     btnDetailsRestart.disabled = true;
     btnDetailsRestart.textContent = 'Restarting...';

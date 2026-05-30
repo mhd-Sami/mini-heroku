@@ -346,6 +346,25 @@ def deploy_app(request: DeployRequest, background_tasks: BackgroundTasks, db: Se
         "local_domain": f"http://{app_name}.localhost"
     }
 
+@app.post("/api/apps/{app_name}/start")
+def start_app(app_name: str, db: Session = Depends(get_db)):
+    deployment = db.query(Deployment).filter(Deployment.app_name == app_name).first()
+    if not deployment:
+        raise HTTPException(status_code=404, detail="App not found")
+    
+    try:
+        client = docker.from_env()
+        container = client.containers.get(app_name)
+        container.start()
+        deployment.status = "running"
+        db.commit()
+        log_message(app_name, "Application container started manually.")
+        return {"status": "success", "message": f"App {app_name} started"}
+    except docker.errors.NotFound:
+        raise HTTPException(status_code=400, detail="Container not found. Please trigger deployment again.")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
 @app.post("/api/apps/{app_name}/stop")
 def stop_app(app_name: str, db: Session = Depends(get_db)):
     deployment = db.query(Deployment).filter(Deployment.app_name == app_name).first()
