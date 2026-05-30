@@ -31,104 +31,195 @@
   </header>
 
   <main class="dashboard-container">
-    <!-- Hero Metrics Banner -->
-    <section class="metrics-grid" aria-label="System Metrics">
-      <div class="metric-card">
-        <div class="metric-info">
-          <span class="metric-title">Total Applications</span>
-          <span class="metric-value" id="metric-total-apps">0</span>
+    <div id="dashboard-view-wrapper">
+      <!-- Hero Metrics Banner -->
+      <section class="metrics-grid" aria-label="System Metrics">
+        <div class="metric-card">
+          <div class="metric-info">
+            <span class="metric-title">Total Applications</span>
+            <span class="metric-value" id="metric-total-apps">0</span>
+          </div>
+          <div class="metric-icon teal-bg">📦</div>
         </div>
-        <div class="metric-icon teal-bg">📦</div>
+        <div class="metric-card">
+          <div class="metric-info">
+            <span class="metric-title">Running Containers</span>
+            <span class="metric-value" id="metric-running-apps">0</span>
+          </div>
+          <div class="metric-icon green-bg">🚀</div>
+        </div>
+        <div class="metric-card">
+          <div class="metric-info">
+            <span class="metric-title">Virtualization Engine</span>
+            <span class="metric-value">Docker</span>
+          </div>
+          <div class="metric-icon beige-bg">⚙️</div>
+        </div>
+      </section>
+
+      <!-- Main Content Workspace -->
+      <div class="workspace-grid">
+        <!-- Left Panel: Deployment Form -->
+        <section class="workspace-card form-section" aria-labelledby="form-heading">
+          <div class="card-header">
+            <h2 id="form-heading">Deploy Application</h2>
+            <p class="card-subtitle">Connect a Git repo to spin up a container via Traefik</p>
+          </div>
+
+          <form id="deploy-form" class="deploy-form">
+            <div class="form-group">
+              <label for="app_name">Application Name</label>
+              <input type="text" id="app_name" name="app_name" placeholder="e.g. static-site" required pattern="^[a-zA-Z0-9-]+$" title="Alphanumeric characters and hyphens only">
+              <span class="input-hint">Used as subdomain (http://app-name.localhost)</span>
+            </div>
+
+            <div class="form-group">
+              <label for="git_url">Git Repository URL</label>
+              <input type="url" id="git_url" name="git_url" placeholder="https://github.com/username/repo.git" required>
+              <span class="input-hint">Must contain a root Dockerfile</span>
+            </div>
+
+            <div class="form-row-2">
+              <div class="form-group">
+                <label for="port">Container Port</label>
+                <input type="number" id="port" name="port" value="80" min="1" max="65535" required>
+              </div>
+              <div class="form-group">
+                <label for="cpu_limit">CPU Limit (Cores)</label>
+                <input type="number" id="cpu_limit" name="cpu_limit" placeholder="e.g. 0.5" step="0.1" min="0.1">
+              </div>
+            </div>
+
+            <div class="form-group">
+              <label for="memory_limit">Memory Limit</label>
+              <input type="text" id="memory_limit" name="memory_limit" placeholder="e.g. 512m, 1g">
+              <span class="input-hint">Suffix with 'm' (MB) or 'g' (GB)</span>
+            </div>
+
+            <!-- Environmental Variables Dynamic Input -->
+            <div class="form-group env-variables-section">
+              <label>Environment Variables</label>
+              <div id="env-list" class="env-list">
+                <!-- Dynamically populated key-value inputs -->
+              </div>
+              <button type="button" id="btn-add-env" class="btn btn-secondary btn-sm">+ Add Variable</button>
+            </div>
+
+            <button type="submit" id="btn-deploy" class="btn btn-primary btn-block">
+              <span>Launch Deployment</span>
+            </button>
+          </form>
+        </section>
+
+        <!-- Right Panel: App Grid -->
+        <section class="workspace-card grid-section" aria-labelledby="grid-heading">
+          <div class="card-header">
+            <h2 id="grid-heading">Active Deployments</h2>
+            <p class="card-subtitle">Monitor and control your deployed services</p>
+          </div>
+
+          <!-- Empty state placeholder -->
+          <div id="empty-state" class="empty-state">
+            <div class="empty-icon">📂</div>
+            <h3>No applications deployed</h3>
+            <p>Fill out the deployment form on the left to launch your first service.</p>
+          </div>
+
+          <div id="apps-grid" class="apps-grid hidden">
+            <!-- Dynamically populated app cards -->
+          </div>
+        </section>
       </div>
-      <div class="metric-card">
-        <div class="metric-info">
-          <span class="metric-title">Running Containers</span>
-          <span class="metric-value" id="metric-running-apps">0</span>
+    </div>
+
+    <!-- Detailed Application View -->
+    <section id="details-view" class="details-view hidden">
+      <div class="details-header">
+        <button type="button" id="btn-back-dashboard" class="btn btn-secondary btn-sm">&larr; Back to Dashboard</button>
+        <div class="details-title-row">
+          <div class="details-title-group">
+            <h2 id="details-app-name">app-name</h2>
+            <span class="app-card-domain">
+              🔗 <a href="#" id="details-app-link" target="_blank">app-name.localhost</a>
+            </span>
+          </div>
+          <span id="details-status-badge" class="status-badge">
+            <span class="pulse-dot"></span>
+            <span id="details-status-text" class="status-text">RUNNING</span>
+          </span>
         </div>
-        <div class="metric-icon green-bg">🚀</div>
       </div>
-      <div class="metric-card">
-        <div class="metric-info">
-          <span class="metric-title">Virtualization Engine</span>
-          <span class="metric-value">Docker</span>
+
+      <div class="details-grid">
+        <!-- Live Metrics Panel -->
+        <div class="details-subcard metrics-panel">
+          <h3>Live Resource Metrics</h3>
+          <div class="details-stats-container">
+            <div class="details-stat-box">
+              <div class="stat-label-group">
+                <span class="stat-name">CPU Utilization</span>
+                <span class="stat-val" id="details-cpu-val">0%</span>
+              </div>
+              <div class="stat-bar-track">
+                <div class="stat-bar-fill" id="details-cpu-bar" style="width: 0%"></div>
+              </div>
+            </div>
+            <div class="details-stat-box" style="margin-top: 1rem;">
+              <div class="stat-label-group">
+                <span class="stat-name">Memory Allocation</span>
+                <span class="stat-val" id="details-mem-val">0MB / 0MB</span>
+              </div>
+              <div class="stat-bar-track">
+                <div class="stat-bar-fill" id="details-mem-bar" style="width: 0%"></div>
+              </div>
+            </div>
+          </div>
         </div>
-        <div class="metric-icon beige-bg">⚙️</div>
+
+        <!-- Configurations Panel -->
+        <div class="details-subcard config-panel">
+          <h3>Application Configuration</h3>
+          <div class="config-info-list">
+            <div><strong>Git Source:</strong> <span id="details-git-url">None</span></div>
+            <div><strong>Target Port:</strong> <span id="details-port">80</span></div>
+            <div><strong>CPU Cap:</strong> <span id="details-cpu-limit">None</span></div>
+            <div><strong>Memory Cap:</strong> <span id="details-mem-limit">None</span></div>
+            <div><strong>Deployed On:</strong> <span id="details-created-at">None</span></div>
+          </div>
+        </div>
+
+        <!-- Env Variables Panel -->
+        <div class="details-subcard env-panel">
+          <h3>Active Environment Variables</h3>
+          <div id="details-env-list" class="details-env-list">
+            <!-- Render key-values -->
+          </div>
+        </div>
+
+        <!-- Application Lifecycle Controls -->
+        <div class="details-subcard actions-panel">
+          <h3>Lifecycle Operations</h3>
+          <div class="details-actions-grid">
+            <button class="btn btn-secondary btn-sm" id="btn-details-restart">Restart App</button>
+            <button class="btn btn-secondary btn-sm" id="btn-details-stop">Stop App</button>
+            <button class="btn btn-danger-outline btn-sm" id="btn-details-delete">Delete App</button>
+          </div>
+        </div>
+
+        <!-- Integrated Console Logs -->
+        <div class="details-subcard logs-panel">
+          <div class="logs-panel-header">
+            <h3>Live Application Logs</h3>
+            <button type="button" id="btn-details-copy-logs" class="btn btn-secondary btn-sm">Copy Logs</button>
+          </div>
+          <div class="details-terminal-wrapper" style="background-color: #0f172a; padding: 1rem; border-radius: var(--radius-md); margin-top: 0.5rem;">
+            <div id="details-terminal" class="terminal-console" style="min-height: 250px; max-height: 350px;">
+              <!-- Real-time logs -->
+            </div>
+          </div>
+        </div>
       </div>
     </section>
-
-    <!-- Main Content Workspace -->
-    <div class="workspace-grid">
-      <!-- Left Panel: Deployment Form -->
-      <section class="workspace-card form-section" aria-labelledby="form-heading">
-        <div class="card-header">
-          <h2 id="form-heading">Deploy Application</h2>
-          <p class="card-subtitle">Connect a Git repo to spin up a container via Traefik</p>
-        </div>
-
-        <form id="deploy-form" class="deploy-form">
-          <div class="form-group">
-            <label for="app_name">Application Name</label>
-            <input type="text" id="app_name" name="app_name" placeholder="e.g. static-site" required pattern="^[a-zA-Z0-9-]+$" title="Alphanumeric characters and hyphens only">
-            <span class="input-hint">Used as subdomain (http://app-name.localhost)</span>
-          </div>
-
-          <div class="form-group">
-            <label for="git_url">Git Repository URL</label>
-            <input type="url" id="git_url" name="git_url" placeholder="https://github.com/username/repo.git" required>
-            <span class="input-hint">Must contain a root Dockerfile</span>
-          </div>
-
-          <div class="form-row-2">
-            <div class="form-group">
-              <label for="port">Container Port</label>
-              <input type="number" id="port" name="port" value="80" min="1" max="65535" required>
-            </div>
-            <div class="form-group">
-              <label for="cpu_limit">CPU Limit (Cores)</label>
-              <input type="number" id="cpu_limit" name="cpu_limit" placeholder="e.g. 0.5" step="0.1" min="0.1">
-            </div>
-          </div>
-
-          <div class="form-group">
-            <label for="memory_limit">Memory Limit</label>
-            <input type="text" id="memory_limit" name="memory_limit" placeholder="e.g. 512m, 1g">
-            <span class="input-hint">Suffix with 'm' (MB) or 'g' (GB)</span>
-          </div>
-
-          <!-- Environmental Variables Dynamic Input -->
-          <div class="form-group env-variables-section">
-            <label>Environment Variables</label>
-            <div id="env-list" class="env-list">
-              <!-- Dynamically populated key-value inputs -->
-            </div>
-            <button type="button" id="btn-add-env" class="btn btn-secondary btn-sm">+ Add Variable</button>
-          </div>
-
-          <button type="submit" id="btn-deploy" class="btn btn-primary btn-block">
-            <span>Launch Deployment</span>
-          </button>
-        </form>
-      </section>
-
-      <!-- Right Panel: App Grid -->
-      <section class="workspace-card grid-section" aria-labelledby="grid-heading">
-        <div class="card-header">
-          <h2 id="grid-heading">Active Deployments</h2>
-          <p class="card-subtitle">Monitor and control your deployed services</p>
-        </div>
-
-        <!-- Empty state placeholder -->
-        <div id="empty-state" class="empty-state">
-          <div class="empty-icon">📂</div>
-          <h3>No applications deployed</h3>
-          <p>Fill out the deployment form on the left to launch your first service.</p>
-        </div>
-
-        <div id="apps-grid" class="apps-grid hidden">
-          <!-- Dynamically populated app cards -->
-        </div>
-      </section>
-    </div>
   </main>
 
   <!-- Live Terminal Log Modal -->

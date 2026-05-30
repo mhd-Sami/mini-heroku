@@ -13,6 +13,8 @@ let deployments = [];
 let statsIntervals = {};
 let logSocket = null;
 let activeLogApp = null;
+let activeDetailsApp = null;
+let detailsSocket = null;
 
 // DOM Elements
 const deployForm = document.getElementById('deploy-form');
@@ -29,6 +31,33 @@ const btnModalCopy = document.getElementById('btn-modal-copy');
 
 const metricTotalApps = document.getElementById('metric-total-apps');
 const metricRunningApps = document.getElementById('metric-running-apps');
+
+const dashboardViewWrapper = document.getElementById('dashboard-view-wrapper');
+const detailsView = document.getElementById('details-view');
+const btnBackDashboard = document.getElementById('btn-back-dashboard');
+
+const detailsAppName = document.getElementById('details-app-name');
+const detailsAppLink = document.getElementById('details-app-link');
+const detailsStatusBadge = document.getElementById('details-status-badge');
+const detailsStatusText = document.getElementById('details-status-text');
+
+const detailsCpuVal = document.getElementById('details-cpu-val');
+const detailsCpuBar = document.getElementById('details-cpu-bar');
+const detailsMemVal = document.getElementById('details-mem-val');
+const detailsMemBar = document.getElementById('details-mem-bar');
+
+const detailsGitUrl = document.getElementById('details-git-url');
+const detailsPort = document.getElementById('details-port');
+const detailsCpuLimit = document.getElementById('details-cpu-limit');
+const detailsMemLimit = document.getElementById('details-mem-limit');
+const detailsCreatedAt = document.getElementById('details-created-at');
+const detailsEnvList = document.getElementById('details-env-list');
+const detailsTerminal = document.getElementById('details-terminal');
+
+const btnDetailsCopyLogs = document.getElementById('btn-details-copy-logs');
+const btnDetailsRestart = document.getElementById('btn-details-restart');
+const btnDetailsStop = document.getElementById('btn-details-stop');
+const btnDetailsDelete = document.getElementById('btn-details-delete');
 
 /* ==========================================================================
    Environment Variables Form Builder
@@ -122,7 +151,7 @@ function renderDashboard() {
     card.innerHTML = `
       <div class="app-card-header">
         <div class="app-card-title-group">
-          <span class="app-card-title">${app.app_name}</span>
+          <span class="app-card-title" style="cursor: pointer;" onclick="openAppDetails('${app.app_name}')" onmouseover="this.style.color='var(--color-accent)'" onmouseout="this.style.color='var(--color-primary)'" title="Click to view detailed configuration">${app.app_name}</span>
           <span class="app-card-domain">
             🔗 <a href="${app.local_domain}" target="_blank">${app.app_name}.localhost</a>
           </span>
@@ -269,11 +298,35 @@ async function pollAppStats(appName) {
         memBar.style.width = `${data.memory_percent}%`;
         setBarColor(memBar, data.memory_percent);
       }
+
+      // Check if this app is currently open in the details view
+      if (activeDetailsApp === appName) {
+        if (detailsCpuVal) detailsCpuVal.textContent = `${data.cpu_percent}%`;
+        if (detailsCpuBar) {
+          detailsCpuBar.style.width = `${Math.min(data.cpu_percent, 100)}%`;
+          setBarColor(detailsCpuBar, data.cpu_percent);
+        }
+        if (detailsMemVal) detailsMemVal.textContent = `${data.memory_usage_mb}MB / ${data.memory_limit_mb}MB`;
+        if (detailsMemBar) {
+          detailsMemBar.style.width = `${data.memory_percent}%`;
+          setBarColor(detailsMemBar, data.memory_percent);
+        }
+      }
     } else {
       // Container stopped or exited
       clearInterval(statsIntervals[appName]);
       delete statsIntervals[appName];
       fetchDeployments();
+
+      // If viewing the details view of this stopped app, update status badge and reset stats
+      if (activeDetailsApp === appName) {
+        detailsStatusBadge.className = `status-badge ${data.status}`;
+        detailsStatusText.textContent = data.status;
+        if (detailsCpuVal) detailsCpuVal.textContent = '0%';
+        if (detailsCpuBar) detailsCpuBar.style.width = '0%';
+        if (detailsMemVal) detailsMemVal.textContent = '0MB / 0MB';
+        if (detailsMemBar) detailsMemBar.style.width = '0%';
+      }
     }
   } catch (err) {
     console.error(`Error polling stats for ${appName}:`, err);
@@ -454,3 +507,168 @@ window.addEventListener('DOMContentLoaded', () => {
   // Poll deployments state list every 10 seconds to keep UI synced
   setInterval(fetchDeployments, 10000);
 });
+
+// ==========================================================================
+// Detailed View Controller Logic
+// ==========================================================================
+
+async function openAppDetails(appName) {
+  activeDetailsApp = appName;
+  
+  const app = deployments.find(d => d.app_name === appName);
+  if (!app) return;
+
+  // Swap workspace view
+  dashboardViewWrapper.classList.add('hidden');
+  detailsView.classList.remove('hidden');
+  
+  // Bind details view metadata
+  detailsAppName.textContent = app.app_name;
+  detailsAppLink.href = app.local_domain;
+  detailsAppLink.textContent = `${app.app_name}.localhost`;
+  
+  detailsStatusBadge.className = `status-badge ${app.status}`;
+  detailsStatusText.textContent = app.status;
+
+  detailsGitUrl.textContent = app.git_url;
+  detailsPort.textContent = app.port;
+  detailsCpuLimit.textContent = app.cpu_limit ? `${app.cpu_limit} Cores` : 'None';
+  detailsMemLimit.textContent = app.memory_limit || 'None';
+  detailsCreatedAt.textContent = new Date(app.created_at).toLocaleString();
+
+  // Env variables
+  detailsEnvList.innerHTML = '';
+  const envKeys = Object.keys(app.env_vars || {});
+  if (envKeys.length === 0) {
+    detailsEnvList.innerHTML = '<div style="font-size: 0.85rem; color: var(--color-text-muted);">No environment variables defined.</div>';
+  } else {
+    envKeys.forEach(key => {
+      const item = document.createElement('div');
+      item.className = 'env-item';
+      item.innerHTML = `
+        <span class="env-key">${key}</span>
+        <span class="env-val">${app.env_vars[key]}</span>
+      `;
+      detailsEnvList.appendChild(item);
+    });
+  }
+
+  // Bind Actions
+  btnDetailsRestart.onclick = async () => {
+    btnDetailsRestart.disabled = true;
+    btnDetailsRestart.textContent = 'Restarting...';
+    try {
+      await restartApp(appName);
+      setTimeout(async () => {
+        await fetchDeployments();
+        openAppDetails(appName);
+      }, 1000);
+    } catch (e) {
+      alert(e.message);
+    } finally {
+      btnDetailsRestart.disabled = false;
+      btnDetailsRestart.textContent = 'Restart App';
+    }
+  };
+
+  btnDetailsStop.onclick = async () => {
+    btnDetailsStop.disabled = true;
+    btnDetailsStop.textContent = 'Stopping...';
+    try {
+      await stopApp(appName);
+      setTimeout(async () => {
+        await fetchDeployments();
+        openAppDetails(appName);
+      }, 1000);
+    } catch (e) {
+      alert(e.message);
+    } finally {
+      btnDetailsStop.disabled = false;
+      btnDetailsStop.textContent = 'Stop App';
+    }
+  };
+
+  btnDetailsDelete.onclick = async () => {
+    if (confirm(`Are you sure you want to delete ${appName}? This will remove the container and the image.`)) {
+      btnDetailsDelete.disabled = true;
+      btnDetailsDelete.textContent = 'Deleting...';
+      try {
+        await deleteApp(appName);
+        closeAppDetails();
+      } catch (e) {
+        alert(e.message);
+      } finally {
+        btnDetailsDelete.disabled = false;
+        btnDetailsDelete.textContent = 'Delete App';
+      }
+    }
+  };
+
+  // Bind Terminal Stream
+  detailsTerminal.innerHTML = '';
+  if (detailsSocket) {
+    detailsSocket.close();
+  }
+
+  const socketUrl = `${WS_BASE}/ws/logs/${appName}`;
+  detailsSocket = new WebSocket(socketUrl);
+
+  detailsSocket.onmessage = (event) => {
+    const line = document.createElement('div');
+    line.textContent = event.data;
+    if (event.data.startsWith('---') || event.data.includes('Successfully deployed!')) {
+      line.style.color = '#38bdf8';
+      line.style.fontWeight = 'bold';
+    } else if (event.data.startsWith('Deployment ERROR:') || event.data.startsWith('[container] ERROR')) {
+      line.style.color = '#ef4444';
+    } else if (event.data.startsWith('[container]')) {
+      line.style.color = '#cbd5e1';
+    } else {
+      line.style.color = '#10b981';
+    }
+    detailsTerminal.appendChild(line);
+    detailsTerminal.scrollTop = detailsTerminal.scrollHeight;
+  };
+
+  detailsSocket.onclose = () => {
+    const line = document.createElement('div');
+    line.textContent = '[UI-CLIENT] WebSocket stream closed.';
+    line.style.color = '#64748b';
+    detailsTerminal.appendChild(line);
+    detailsTerminal.scrollTop = detailsTerminal.scrollHeight;
+  };
+
+  btnDetailsCopyLogs.onclick = () => {
+    const logLines = Array.from(detailsTerminal.children).map(child => child.textContent);
+    const fullLog = logLines.join('\n');
+    navigator.clipboard.writeText(fullLog).then(() => {
+      const originalText = btnDetailsCopyLogs.textContent;
+      btnDetailsCopyLogs.textContent = 'Copied!';
+      btnDetailsCopyLogs.style.borderColor = 'var(--color-success)';
+      btnDetailsCopyLogs.style.color = 'var(--color-success)';
+      setTimeout(() => {
+        btnDetailsCopyLogs.textContent = originalText;
+        btnDetailsCopyLogs.style.borderColor = '';
+        btnDetailsCopyLogs.style.color = '';
+      }, 2000);
+    });
+  };
+
+  // Perform initial stats call
+  pollAppStats(appName);
+}
+
+function closeAppDetails() {
+  activeDetailsApp = null;
+  dashboardViewWrapper.classList.remove('hidden');
+  detailsView.classList.add('hidden');
+  
+  if (detailsSocket) {
+    detailsSocket.close();
+    detailsSocket = null;
+  }
+  
+  fetchDeployments();
+}
+
+btnBackDashboard.addEventListener('click', closeAppDetails);

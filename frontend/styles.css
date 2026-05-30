@@ -812,3 +812,163 @@ input:focus {
   font-size: 0.8rem;
   color: var(--color-text-muted);
 }
+
+/* ==========================================================================
+   Detailed App View Styles
+   ========================================================================== */
+
+.details-view {
+  background-color: var(--color-bg-surface);
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--color-bg-alt);
+  box-shadow: var(--shadow-md);
+  padding: 2.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 2rem;
+}
+
+.details-header {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+  border-bottom: 1px solid var(--color-bg-alt);
+  padding-bottom: 1.5rem;
+}
+
+.details-title-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 1rem;
+}
+
+.details-title-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.details-title-group h2 {
+  font-family: var(--font-family-title);
+  font-size: 2rem;
+  font-weight: 800;
+  color: var(--color-primary);
+  line-height: 1.1;
+}
+
+.details-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1.5rem;
+}
+
+@media (max-width: 992px) {
+  .details-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.details-subcard {
+  background-color: var(--color-bg-cream);
+  border: 1px solid var(--color-bg-alt);
+  border-radius: var(--radius-md);
+  padding: 1.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+  box-shadow: var(--shadow-sm);
+}
+
+.details-subcard h3 {
+  font-family: var(--font-family-title);
+  font-size: 1.15rem;
+  font-weight: 700;
+  color: var(--color-primary);
+  border-bottom: 1.5px solid var(--color-bg-alt);
+  padding-bottom: 0.5rem;
+}
+
+.config-panel {
+  display: flex;
+  flex-direction: column;
+}
+
+.config-info-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  font-size: 0.9rem;
+}
+
+.config-info-list div {
+  display: flex;
+  justify-content: space-between;
+  border-bottom: 1px dashed var(--color-bg-alt);
+  padding-bottom: 0.4rem;
+}
+
+.config-info-list div strong {
+  color: var(--color-text-muted);
+}
+
+.config-info-list div span {
+  font-weight: 600;
+  color: var(--color-text-main);
+  max-width: 250px;
+  word-break: break-all;
+}
+
+.details-env-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  max-height: 200px;
+  overflow-y: auto;
+  padding-right: 0.25rem;
+}
+
+.env-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background-color: var(--color-bg-base);
+  padding: 0.5rem 1rem;
+  border-radius: var(--radius-sm);
+  font-size: 0.85rem;
+  font-family: var(--font-family-mono);
+  border: 1px solid rgba(14, 90, 90, 0.05);
+}
+
+.env-item .env-key {
+  color: var(--color-primary-light);
+  font-weight: 600;
+}
+
+.env-item .env-val {
+  color: var(--color-text-main);
+  word-break: break-all;
+}
+
+.logs-panel {
+  grid-column: span 2;
+}
+
+@media (max-width: 992px) {
+  .logs-panel {
+    grid-column: span 1;
+  }
+}
+
+.logs-panel-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.details-actions-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 0.75rem;
+}

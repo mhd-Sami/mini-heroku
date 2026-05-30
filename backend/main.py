@@ -155,6 +155,7 @@ def deploy_app_task(
 
         labels = {
             "traefik.enable": "true",
+            "traefik.docker.network": "mini-heroku-net",
             f"traefik.http.routers.{app_name}.rule": f"Host(`{app_name}.localhost`)",
             f"traefik.http.routers.{app_name}.entrypoints": "web",
             f"traefik.http.services.{app_name}.loadbalancer.server.port": str(port)
