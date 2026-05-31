@@ -26,6 +26,159 @@ const btnResendVerification = document.getElementById('btn-resend-verification')
 let authMode = 'supabase';
 let supabase = null;
 
+// Input validation functions
+function validateUsernameOrEmail(val) {
+  if (val.includes('@')) {
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (emailRegex.test(val)) {
+      return { isValid: true, message: 'Valid email format.' };
+    } else {
+      return { isValid: false, message: 'Please enter a valid email address.' };
+    }
+  } else {
+    const usernameRegex = /^[a-zA-Z0-9_-]{3,20}$/;
+    if (usernameRegex.test(val)) {
+      return { isValid: true, message: 'Valid username format.' };
+    } else {
+      return { isValid: false, message: 'Username must be 3-20 characters (letters, numbers, _, -).' };
+    }
+  }
+}
+
+function validateEmailOnly(val) {
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  if (emailRegex.test(val)) {
+    return { isValid: true, message: 'Valid email format.' };
+  } else {
+    return { isValid: false, message: 'Please enter a valid email address.' };
+  }
+}
+
+function validatePassword(val) {
+  if (val.length >= 6) {
+    return { isValid: true, message: 'Password length is sufficient.' };
+  } else {
+    return { isValid: false, message: 'Password must be at least 6 characters long.' };
+  }
+}
+
+function setupRealtimeValidation(inputId, validationFn) {
+  const input = document.getElementById(inputId);
+  if (!input) return;
+
+  // Create validation message container
+  let msg = document.getElementById(`${inputId}-val-msg`);
+  if (!msg) {
+    msg = document.createElement('div');
+    msg.id = `${inputId}-val-msg`;
+    msg.className = 'input-hint val-msg hidden';
+    msg.style.marginTop = '0.25rem';
+    msg.style.fontSize = '0.8rem';
+    msg.style.fontWeight = '500';
+    msg.style.transition = 'all 0.2s ease';
+    input.parentNode.appendChild(msg);
+  }
+
+  input.addEventListener('input', () => {
+    const value = input.value;
+    if (value === '') {
+      msg.classList.add('hidden');
+      input.style.borderColor = '';
+      return;
+    }
+
+    const { isValid, message } = validationFn(value);
+    msg.textContent = message;
+    msg.classList.remove('hidden');
+
+    if (isValid) {
+      msg.style.color = '#22c55e'; // Success Green
+      input.style.borderColor = '#22c55e';
+    } else {
+      msg.style.color = '#ef4444'; // Danger Red
+      input.style.borderColor = '#ef4444';
+    }
+  });
+}
+
+let usernameCheckTimeout = null;
+function setupRealtimeUsernameUniqueness(inputId) {
+  const input = document.getElementById(inputId);
+  if (!input) return;
+
+  let msg = document.getElementById(`${inputId}-val-msg`);
+  if (!msg) {
+    msg = document.createElement('div');
+    msg.id = `${inputId}-val-msg`;
+    msg.className = 'input-hint val-msg hidden';
+    msg.style.marginTop = '0.25rem';
+    msg.style.fontSize = '0.8rem';
+    msg.style.fontWeight = '500';
+    msg.style.transition = 'all 0.2s ease';
+    input.parentNode.appendChild(msg);
+  }
+
+  input.addEventListener('input', () => {
+    const val = input.value.trim();
+    if (usernameCheckTimeout) {
+      clearTimeout(usernameCheckTimeout);
+    }
+
+    if (val === '') {
+      msg.classList.add('hidden');
+      input.style.borderColor = '';
+      return;
+    }
+
+    const usernameRegex = /^[a-zA-Z0-9_-]{3,20}$/;
+    if (!usernameRegex.test(val)) {
+      msg.textContent = 'Username must be 3-20 characters (letters, numbers, _, -).';
+      msg.classList.remove('hidden');
+      msg.style.color = '#ef4444';
+      input.style.borderColor = '#ef4444';
+      return;
+    }
+
+    msg.textContent = 'Checking availability...';
+    msg.classList.remove('hidden');
+    msg.style.color = '#a0aec0';
+    input.style.borderColor = '#a0aec0';
+
+    usernameCheckTimeout = setTimeout(async () => {
+      try {
+        const res = await fetch(`${API_BASE}/api/auth/exists?username=${encodeURIComponent(val)}`);
+        if (!res.ok) throw new Error('Uniqueness check failed');
+        const data = await res.json();
+        if (input.value.trim() !== val) return;
+
+        if (data.exists) {
+          msg.textContent = 'Username already taken.';
+          msg.style.color = '#ef4444';
+          input.style.borderColor = '#ef4444';
+        } else {
+          msg.textContent = 'Username is available!';
+          msg.style.color = '#22c55e';
+          input.style.borderColor = '#22c55e';
+        }
+      } catch (err) {
+        console.error(err);
+        if (input.value.trim() !== val) return;
+        msg.textContent = 'Error checking username availability.';
+        msg.style.color = '#a0aec0';
+        input.style.borderColor = '';
+      }
+    }, 400);
+  });
+}
+
+// Setup real-time validation on available inputs
+setupRealtimeValidation('login-username', validateUsernameOrEmail);
+setupRealtimeValidation('login-password', validatePassword);
+setupRealtimeValidation('register-username', validateUsernameOrEmail);
+setupRealtimeValidation('register-password', validatePassword);
+setupRealtimeValidation('forgot-email', validateEmailOnly);
+setupRealtimeUsernameUniqueness('profile-username');
+
 // Load configurations on startup
 async function loadAuthConfig() {
   try {
@@ -36,20 +189,106 @@ async function loadAuthConfig() {
 
     if (authMode === 'supabase') {
       await initializeSupabase(config.supabase_config);
-      
-      const token = localStorage.getItem('mini_heroku_token');
-      const profileCompleted = localStorage.getItem('mini_heroku_profile_completed');
-      if (token && !profileCompleted && supabase) {
-        const { data: { user } } = await supabase.auth.getUser();
-        if (user) {
-          if (!user.email_confirmed_at) {
+      if (!supabase) return;
+
+      // Listen for auth state changes (captures callbacks, sign ins, verify links)
+      supabase.auth.onAuthStateChange(async (event, session) => {
+        if (event === 'PASSWORD_RECOVERY') {
+          window.location.replace('/auth/reset-password.html');
+          return;
+        }
+        if (session && session.user) {
+          const token = session.access_token;
+          localStorage.setItem('mini_heroku_token', token);
+          
+          // Set email as temporary fallback username if none exists or is an email
+          const currentStoredUsername = localStorage.getItem('mini_heroku_username');
+          if (!currentStoredUsername || currentStoredUsername.includes('@')) {
+            localStorage.setItem('mini_heroku_username', session.user.email);
+          }
+
+          if (session.user.email_confirmed_at) {
+            try {
+              const profileRes = await fetch(`${API_BASE}/api/auth/profile`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+              });
+              if (profileRes.ok) {
+                const profileData = await profileRes.json();
+                if (profileData.username) {
+                  localStorage.setItem('mini_heroku_username', profileData.username);
+                }
+                localStorage.setItem('mini_heroku_profile_completed', 'true');
+                if (window.location.pathname.includes('/auth/') && !window.location.pathname.includes('reset-password.html')) {
+                  window.location.replace('/index.html');
+                }
+              } else if (profileRes.status === 404) {
+                localStorage.removeItem('mini_heroku_profile_completed');
+                if (!window.location.pathname.includes('/auth/profile.html')) {
+                  window.location.replace('/auth/profile.html');
+                }
+              }
+            } catch (err) {
+              console.error("Error checking profile on auth change:", err);
+              if (!window.location.pathname.includes('/auth/profile.html')) {
+                window.location.replace('/auth/profile.html');
+              }
+            }
+          } else {
             if (!window.location.pathname.includes('/auth/verify.html')) {
               window.location.replace('/auth/verify.html');
             }
-          } else {
-            if (!window.location.pathname.includes('/auth/profile.html')) {
-              window.location.replace('/auth/profile.html');
+          }
+        } else if (event === 'SIGNED_OUT') {
+          localStorage.removeItem('mini_heroku_token');
+          localStorage.removeItem('mini_heroku_username');
+          localStorage.removeItem('mini_heroku_profile_completed');
+        }
+      });
+
+      // Explicitly check current session state (e.g. on direct page loads/refresh)
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session && session.user) {
+        const token = session.access_token;
+        localStorage.setItem('mini_heroku_token', token);
+        
+        // Set email as temporary fallback username if none exists or is an email
+        const currentStoredUsername = localStorage.getItem('mini_heroku_username');
+        if (!currentStoredUsername || currentStoredUsername.includes('@')) {
+          localStorage.setItem('mini_heroku_username', session.user.email);
+        }
+
+        if (session.user.email_confirmed_at) {
+          const profileCompleted = localStorage.getItem('mini_heroku_profile_completed');
+          // If profile completed is not set or username is still email, let's fetch profile to sync username
+          if (!profileCompleted || !currentStoredUsername || currentStoredUsername.includes('@')) {
+            try {
+              const profileRes = await fetch(`${API_BASE}/api/auth/profile`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+              });
+              if (profileRes.ok) {
+                const profileData = await profileRes.json();
+                if (profileData.username) {
+                  localStorage.setItem('mini_heroku_username', profileData.username);
+                }
+                localStorage.setItem('mini_heroku_profile_completed', 'true');
+                if (window.location.pathname.includes('/auth/') && !window.location.pathname.includes('reset-password.html')) {
+                  window.location.replace('/index.html');
+                }
+              } else if (profileRes.status === 404) {
+                if (!window.location.pathname.includes('/auth/profile.html')) {
+                  window.location.replace('/auth/profile.html');
+                }
+              }
+            } catch (err) {
+              console.error("Error checking profile on initial session check:", err);
+              if (!window.location.pathname.includes('/auth/profile.html')) {
+                window.location.replace('/auth/profile.html');
+              }
             }
+          }
+        } else {
+          if (!window.location.pathname.includes('/auth/verify.html')) {
+            window.location.replace('/auth/verify.html');
           }
         }
       }
@@ -92,14 +331,41 @@ if (loginForm) {
     btnSubmit.disabled = true;
     if (loginError) loginError.classList.add('hidden');
 
+    // Real-time block check on submit
+    const usernameVal = validateUsernameOrEmail(username);
+    const passwordVal = validatePassword(password);
+    if (!usernameVal.isValid || !passwordVal.isValid) {
+      if (loginError) {
+        loginError.textContent = !usernameVal.isValid ? usernameVal.message : passwordVal.message;
+        loginError.classList.remove('hidden');
+      }
+      btnSubmit.disabled = false;
+      return;
+    }
+
     try {
       if (authMode === 'supabase') {
         if (!supabase) throw new Error("Supabase Client is offline. (To test locally without Supabase, set MINI_HEROKU_AUTH_MODE=local in your .env and restart)");
-        const email = username.includes('@') ? username : `${username}@miniheroku.local`;
+        
+        let email = username;
+        if (!username.includes('@')) {
+          try {
+            const resolveRes = await fetch(`${API_BASE}/api/auth/resolve?username=${encodeURIComponent(username)}`);
+            if (!resolveRes.ok) {
+              const resolveData = await resolveRes.json();
+              throw new Error(resolveData.detail || "No account exists with this username.");
+            }
+            const resolveData = await resolveRes.json();
+            email = resolveData.email;
+          } catch (resolveErr) {
+            throw new Error(resolveErr.message || "Failed to resolve username.");
+          }
+        }
+
         const { data, error } = await supabase.auth.signInWithPassword({ email, password });
         if (error) {
           try {
-            const checkRes = await fetch(`${API_BASE}/api/auth/exists?username=${encodeURIComponent(username)}`);
+            const checkRes = await fetch(`${API_BASE}/api/auth/exists?username=${encodeURIComponent(email)}`);
             if (checkRes.ok) {
               const checkData = await checkRes.json();
               if (!checkData.exists) {
@@ -132,6 +398,10 @@ if (loginForm) {
             headers: { 'Authorization': `Bearer ${token}` }
           });
           if (profileRes.ok) {
+            const profileData = await profileRes.json();
+            if (profileData.username) {
+              localStorage.setItem('mini_heroku_username', profileData.username);
+            }
             localStorage.setItem('mini_heroku_profile_completed', 'true');
             window.location.replace('/index.html');
           } else if (profileRes.status === 404) {
@@ -180,11 +450,29 @@ if (registerForm) {
     if (registerError) registerError.classList.add('hidden');
     if (registerSuccess) registerSuccess.classList.add('hidden');
 
+    // Real-time block check on submit
+    const usernameVal = validateUsernameOrEmail(username);
+    const passwordVal = validatePassword(password);
+    if (!usernameVal.isValid || !passwordVal.isValid) {
+      if (registerError) {
+        registerError.textContent = !usernameVal.isValid ? usernameVal.message : passwordVal.message;
+        registerError.classList.remove('hidden');
+      }
+      btnSubmit.disabled = false;
+      return;
+    }
+
     try {
       if (authMode === 'supabase') {
         if (!supabase) throw new Error("Supabase Client is offline. (To test locally without Supabase, set MINI_HEROKU_AUTH_MODE=local in your .env and restart)");
         const email = username.includes('@') ? username : `${username}@miniheroku.local`;
-        const { data, error } = await supabase.auth.signUp({ email, password });
+        const { data, error } = await supabase.auth.signUp({ 
+          email, 
+          password,
+          options: {
+            emailRedirectTo: window.location.origin + '/auth/login.html'
+          }
+        });
         if (error) throw error;
         
         // Save register email temporarily in cache for potential resends
@@ -230,11 +518,34 @@ if (forgotForm) {
     if (forgotError) forgotError.classList.add('hidden');
     if (forgotSuccess) forgotSuccess.classList.add('hidden');
 
+    // Real-time block check on submit
+    const emailVal = validateEmailOnly(email);
+    if (!emailVal.isValid) {
+      if (forgotError) {
+        forgotError.textContent = emailVal.message;
+        forgotError.classList.remove('hidden');
+      }
+      btnSubmit.disabled = false;
+      return;
+    }
+
     try {
       if (authMode === 'supabase') {
         if (!supabase) throw new Error("Supabase Client is offline.");
+        
+        // Verify account exists before triggering password reset email
+        const checkRes = await fetch(`${API_BASE}/api/auth/exists?username=${encodeURIComponent(email)}`);
+        if (checkRes.ok) {
+          const checkData = await checkRes.json();
+          if (!checkData.exists) {
+            throw new Error("No account exists with this email address.");
+          }
+        } else {
+          throw new Error("Failed to verify account status. Please try again.");
+        }
+
         const { error } = await supabase.auth.resetPasswordForEmail(email, {
-          redirectTo: `${window.location.origin}/auth/login.html`
+          redirectTo: `${window.location.origin}/auth/reset-password.html`
         });
         if (error) throw error;
         if (forgotSuccess) forgotSuccess.classList.remove('hidden');
@@ -269,28 +580,35 @@ if (btnCheckVerification) {
     if (verificationSuccess) verificationSuccess.classList.add('hidden');
     
     try {
-      const { data: { session }, error: sessionError } = await supabase.auth.getSession();
-      if (sessionError) throw sessionError;
+      // Fetch latest user details from Supabase server to check verification status
+      const { data: { user }, error: userError } = await supabase.auth.getUser();
+      if (userError) throw userError;
 
-      if (session && session.user) {
-        const user = session.user;
-        
+      if (user) {
         if (user.email_confirmed_at) {
-          const token = session.access_token;
-          localStorage.setItem('mini_heroku_token', token);
-          localStorage.setItem('mini_heroku_username', user.email);
-          
-          const profileRes = await fetch(`${API_BASE}/api/auth/profile`, {
-            headers: { 'Authorization': `Bearer ${token}` }
-          });
-          
-          if (profileRes.ok) {
-            localStorage.setItem('mini_heroku_profile_completed', 'true');
-            window.location.replace('/index.html');
-          } else if (profileRes.status === 404) {
-            window.location.replace('/auth/profile.html');
+          // Force token refresh to include the email confirmation claim
+          const { data: { session }, error: refreshError } = await supabase.auth.refreshSession();
+          if (refreshError) throw refreshError;
+
+          if (session) {
+            const token = session.access_token;
+            localStorage.setItem('mini_heroku_token', token);
+            localStorage.setItem('mini_heroku_username', user.email);
+            
+            const profileRes = await fetch(`${API_BASE}/api/auth/profile`, {
+              headers: { 'Authorization': `Bearer ${token}` }
+            });
+            
+            if (profileRes.ok) {
+              localStorage.setItem('mini_heroku_profile_completed', 'true');
+              window.location.replace('/index.html');
+            } else if (profileRes.status === 404) {
+              window.location.replace('/auth/profile.html');
+            } else {
+              throw new Error("Failed to verify user profile state.");
+            }
           } else {
-            throw new Error("Failed to verify user profile state.");
+            throw new Error("Could not refresh active session.");
           }
         } else {
           if (verificationError) {
@@ -360,6 +678,7 @@ if (profileForm) {
   profileForm.addEventListener('submit', async (e) => {
     e.preventDefault();
     const name = document.getElementById('profile-name').value.trim();
+    const username = document.getElementById('profile-username').value.trim();
     const use_case = document.getElementById('profile-use-case').value.trim();
     const company = document.getElementById('profile-company').value.trim();
     
@@ -377,12 +696,13 @@ if (profileForm) {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`
         },
-        body: JSON.stringify({ name, use_case, company: company || null })
+        body: JSON.stringify({ name, username, use_case, company: company || null })
       });
       
       const data = await res.json();
       if (!res.ok) throw new Error(data.detail || "Failed to submit profile details.");
       
+      localStorage.setItem('mini_heroku_username', username);
       localStorage.setItem('mini_heroku_profile_completed', 'true');
       window.location.replace('/index.html');
     } catch (err) {
@@ -392,6 +712,83 @@ if (profileForm) {
       }
     } finally {
       btnSubmit.disabled = false;
+    }
+  });
+}
+
+// Reset Password Form Submission
+const resetPasswordForm = document.getElementById('reset-password-form');
+const resetPasswordError = document.getElementById('reset-password-error');
+const resetPasswordSuccess = document.getElementById('reset-password-success');
+
+if (resetPasswordForm) {
+  setupRealtimeValidation('reset-new-password', validatePassword);
+  setupRealtimeValidation('reset-confirm-password', (val) => {
+    const p1 = document.getElementById('reset-new-password').value;
+    if (val === p1) {
+      return { isValid: true, message: 'Passwords match.' };
+    } else {
+      return { isValid: false, message: 'Passwords do not match.' };
+    }
+  });
+
+  resetPasswordForm.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const newPassword = document.getElementById('reset-new-password').value;
+    const confirmPassword = document.getElementById('reset-confirm-password').value;
+    
+    const btnSubmit = document.getElementById('btn-submit-reset-password');
+    btnSubmit.disabled = true;
+    const originalText = btnSubmit.textContent;
+    btnSubmit.innerHTML = `<span class="btn-spinner"></span> Updating...`;
+    
+    if (resetPasswordError) resetPasswordError.classList.add('hidden');
+    if (resetPasswordSuccess) resetPasswordSuccess.classList.add('hidden');
+    
+    const pVal = validatePassword(newPassword);
+    if (!pVal.isValid) {
+      resetPasswordError.textContent = pVal.message;
+      resetPasswordError.classList.remove('hidden');
+      btnSubmit.disabled = false;
+      btnSubmit.textContent = originalText;
+      return;
+    }
+    
+    if (newPassword !== confirmPassword) {
+      resetPasswordError.textContent = "Passwords do not match.";
+      resetPasswordError.classList.remove('hidden');
+      btnSubmit.disabled = false;
+      btnSubmit.textContent = originalText;
+      return;
+    }
+    
+    try {
+      if (authMode === 'supabase') {
+        if (!supabase) throw new Error("Supabase Client is offline.");
+        const { error } = await supabase.auth.updateUser({ password: newPassword });
+        if (error) throw error;
+        
+        resetPasswordSuccess.textContent = "Password updated successfully! Redirecting to login...";
+        resetPasswordSuccess.classList.remove('hidden');
+        resetPasswordForm.reset();
+        
+        // Log out user so they have to sign in again with the new password
+        await supabase.auth.signOut();
+        localStorage.removeItem('mini_heroku_token');
+        localStorage.removeItem('mini_heroku_username');
+        localStorage.removeItem('mini_heroku_profile_completed');
+        
+        setTimeout(() => {
+          window.location.replace('/auth/login.html');
+        }, 3000);
+      } else {
+        throw new Error("Password resetting is only supported in Supabase mode.");
+      }
+    } catch (err) {
+      resetPasswordError.textContent = err.message;
+      resetPasswordError.classList.remove('hidden');
+      btnSubmit.disabled = false;
+      btnSubmit.textContent = originalText;
     }
   });
 }

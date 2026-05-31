@@ -4,11 +4,12 @@ const API_BASE = window.location.origin;
 
 // DOM Elements
 const profileEmail = document.getElementById('profile-email');
+const profileUsernameDisplay = document.getElementById('profile-username-display');
 const profileProvider = document.getElementById('profile-provider');
 const profileUid = document.getElementById('profile-uid');
-const btnTriggerReset = document.getElementById('btn-trigger-reset');
-const resetSuccess = document.getElementById('reset-success');
-const resetError = document.getElementById('reset-error');
+const changePasswordForm = document.getElementById('change-password-form');
+const changeSuccess = document.getElementById('change-success');
+const changeError = document.getElementById('change-error');
 
 let authMode = 'supabase';
 let supabase = null;
@@ -16,7 +17,10 @@ let currentEmail = '';
 
 async function loadAccountInfo() {
   const username = localStorage.getItem('mini_heroku_username') || 'Guest';
-  profileEmail.textContent = username;
+  if (profileUsernameDisplay) {
+    profileUsernameDisplay.textContent = username.includes('@') ? '--' : username;
+  }
+  profileEmail.textContent = username.includes('@') ? username : '--';
   currentEmail = username;
 
   try {
@@ -30,11 +34,6 @@ async function loadAccountInfo() {
     } else {
       profileProvider.textContent = 'Local SQLite Database';
       profileUid.textContent = 'Local Session';
-      
-      btnTriggerReset.addEventListener('click', () => {
-        resetError.textContent = "Password resets are only supported in Supabase mode. For local developer testing, please reset the SQLite database.";
-        resetError.classList.remove('hidden');
-      });
     }
   } catch (err) {
     console.error('Error fetching config:', err);
@@ -57,26 +56,6 @@ function initializeSupabase(supabaseConfig) {
         profileEmail.textContent = user.email;
         profileProvider.textContent = 'Supabase Authentication';
         profileUid.textContent = user.id;
-
-        // Hook reset button
-        btnTriggerReset.onclick = async () => {
-          btnTriggerReset.disabled = true;
-          resetSuccess.classList.add('hidden');
-          resetError.classList.add('hidden');
-          try {
-            const { error } = await supabase.auth.resetPasswordForEmail(user.email, {
-              redirectTo: `${window.location.origin}/auth/login.html`
-            });
-            if (error) throw error;
-            resetSuccess.textContent = `A password reset email has been sent to ${user.email}. Check your inbox.`;
-            resetSuccess.classList.remove('hidden');
-          } catch (e) {
-            resetError.textContent = e.message;
-            resetError.classList.remove('hidden');
-          } finally {
-            btnTriggerReset.disabled = false;
-          }
-        };
       } else {
         window.location.href = '/auth/login.html';
       }
@@ -86,4 +65,98 @@ function initializeSupabase(supabaseConfig) {
   }
 }
 
+async function loadProfileInfo() {
+  try {
+    const res = await authFetch(`${API_BASE}/api/auth/profile`);
+    if (res.ok) {
+      const data = await res.json();
+      if (data.email) {
+        profileEmail.textContent = data.email;
+        currentEmail = data.email;
+      }
+      if (data.username) {
+        localStorage.setItem('mini_heroku_username', data.username);
+        const headerUsername = document.getElementById('header-username');
+        if (headerUsername) {
+          headerUsername.textContent = data.username;
+        }
+        if (profileUsernameDisplay) {
+          profileUsernameDisplay.textContent = data.username;
+        }
+      }
+    }
+  } catch (err) {
+    console.error('Failed to load profile details:', err);
+  }
+}
+
+// Bind password change form
+if (changePasswordForm) {
+  changePasswordForm.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const newPassword = document.getElementById('change-new-password').value;
+    const confirmPassword = document.getElementById('change-confirm-password').value;
+    
+    const btnSubmit = document.getElementById('btn-submit-change-password');
+    btnSubmit.disabled = true;
+    const originalText = btnSubmit.textContent;
+    btnSubmit.innerHTML = `<span class="btn-spinner"></span> Updating...`;
+    
+    if (changeSuccess) changeSuccess.classList.add('hidden');
+    if (changeError) changeError.classList.add('hidden');
+    
+    if (newPassword.length < 6) {
+      changeError.textContent = "Password must be at least 6 characters long.";
+      changeError.classList.remove('hidden');
+      btnSubmit.disabled = false;
+      btnSubmit.textContent = originalText;
+      return;
+    }
+    
+    if (newPassword !== confirmPassword) {
+      changeError.textContent = "Passwords do not match.";
+      changeError.classList.remove('hidden');
+      btnSubmit.disabled = false;
+      btnSubmit.textContent = originalText;
+      return;
+    }
+    
+    try {
+      if (authMode === 'supabase') {
+        if (!supabase) throw new Error("Supabase Client is offline.");
+        const { error } = await supabase.auth.updateUser({ password: newPassword });
+        if (error) throw error;
+        
+        changeSuccess.textContent = "Password updated successfully!";
+        changeSuccess.classList.remove('hidden');
+        changePasswordForm.reset();
+      } else {
+        // Local auth password change
+        const token = localStorage.getItem('mini_heroku_token');
+        const res = await fetch(`${API_BASE}/api/auth/change-password`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+          body: JSON.stringify({ password: newPassword })
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.detail || "Failed to update password.");
+        
+        changeSuccess.textContent = "Password updated successfully!";
+        changeSuccess.classList.remove('hidden');
+        changePasswordForm.reset();
+      }
+    } catch (err) {
+      changeError.textContent = err.message;
+      changeError.classList.remove('hidden');
+    } finally {
+      btnSubmit.disabled = false;
+      btnSubmit.textContent = originalText;
+    }
+  });
+}
+
 loadAccountInfo();
+loadProfileInfo();

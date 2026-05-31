@@ -117,7 +117,7 @@ async function runAction(action) {
   const btn = action === 'start' ? btnDetailsStart : (action === 'stop' ? btnDetailsStop : btnDetailsRestart);
   const originalText = btn.textContent;
   btn.disabled = true;
-  btn.textContent = 'Processing...';
+  btn.innerHTML = `<span class="btn-spinner"></span> ${action.charAt(0).toUpperCase() + action.slice(1)}ing...`;
 
   try {
     const res = await authFetch(`${API_BASE}/api/apps/${appName}/${action}`, { method: 'POST' });
@@ -137,7 +137,7 @@ async function deleteApp() {
     return;
   }
   btnDetailsDelete.disabled = true;
-  btnDetailsDelete.textContent = 'Deleting...';
+  btnDetailsDelete.innerHTML = '<span class="btn-spinner"></span> Deleting...';
   try {
     const res = await authFetch(`${API_BASE}/api/apps/${appName}/delete`, { method: 'POST' });
     if (!res.ok) throw new Error('Deletion failed');

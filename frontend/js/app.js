@@ -53,12 +53,17 @@ async function fetchMetrics() {
     if (!res.ok) throw new Error('Failed to load apps');
     const deployments = await res.json();
     
-    metricTotalApps.textContent = deployments.length;
-    const runningCount = deployments.filter(d => d.status === 'running').length;
-    metricRunningApps.textContent = runningCount;
+    localStorage.setItem('mini_heroku_deployments_cache', JSON.stringify(deployments));
+    updateMetricsUI(deployments);
   } catch (err) {
     console.error('Error fetching metrics:', err);
   }
+}
+
+function updateMetricsUI(deployments) {
+  if (metricTotalApps) metricTotalApps.textContent = deployments.length;
+  const runningCount = deployments.filter(d => d.status === 'running').length;
+  if (metricRunningApps) metricRunningApps.textContent = runningCount;
 }
 
 /* ==========================================================================
@@ -86,7 +91,7 @@ deployForm.addEventListener('submit', async (e) => {
 
   const btnDeploy = document.getElementById('btn-deploy');
   btnDeploy.disabled = true;
-  btnDeploy.querySelector('span').textContent = 'Initiating...';
+  btnDeploy.querySelector('span').innerHTML = '<span class="btn-spinner"></span> Initiating...';
 
   try {
     const res = await authFetch(`${API_BASE}/api/deploy`, {
@@ -112,4 +117,18 @@ deployForm.addEventListener('submit', async (e) => {
 });
 
 // Load metrics on start
+function loadCachedMetrics() {
+  const cached = localStorage.getItem('mini_heroku_deployments_cache');
+  if (cached) {
+    try {
+      const deployments = JSON.parse(cached);
+      if (deployments) {
+        updateMetricsUI(deployments);
+      }
+    } catch (e) {
+      console.error("Failed to parse cached metrics:", e);
+    }
+  }
+}
+loadCachedMetrics();
 fetchMetrics();

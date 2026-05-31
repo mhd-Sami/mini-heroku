@@ -28,8 +28,6 @@ services:
       - "/var/run/docker.sock:/var/run/docker.sock"
       - backend-db:/app/data
       - ./frontend:/app/frontend
-    environment:
-      - DATABASE_URL=sqlite:////app/data/mini_heroku.db
     env_file:
       - .env
     networks:

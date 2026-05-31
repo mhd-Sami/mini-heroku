@@ -4,6 +4,24 @@
   const profileCompleted = localStorage.getItem('mini_heroku_profile_completed');
   const isAuthPage = window.location.pathname.includes('/auth/');
   
+  // Check if current URL contains Supabase auth parameters (callback context)
+  const hasAuthParams = window.location.hash.includes('access_token=') || 
+                        window.location.hash.includes('id_token=') ||
+                        window.location.hash.includes('error=') ||
+                        window.location.search.includes('code=') ||
+                        window.location.search.includes('type=signup') ||
+                        window.location.hash.includes('type=signup') ||
+                        window.location.hash.includes('type=recovery');
+
+  if (hasAuthParams) {
+    if (!isAuthPage) {
+      // Redirect to the login page preserving the auth credentials in hash/query params
+      // so that Supabase client can initialize and parse the session.
+      window.location.replace('/auth/login.html' + window.location.search + window.location.hash);
+    }
+    return; // Bypass any further checks to let the page or the login portal process auth
+  }
+
   if (!isAuthPage) {
     if (!token) {
       window.location.replace('/auth/login.html');
@@ -14,7 +32,7 @@
     // If we are on an auth page, redirect if already logged in and profile completed
     if (token && profileCompleted) {
       const params = new URLSearchParams(window.location.search);
-      if (params.get('action') !== 'logout') {
+      if (params.get('action') !== 'logout' && !window.location.pathname.includes('reset-password.html')) {
         window.location.replace('/index.html');
       }
     }

@@ -29,8 +29,15 @@
           <p class="card-subtitle">Manage and monitor running containers</p>
         </div>
 
+        <!-- Loading state placeholder -->
+        <div id="loading-state" class="empty-state">
+          <div class="loading-spinner"></div>
+          <h3>Loading deployments...</h3>
+          <p>Connecting to Vessel daemon and fetching active containers</p>
+        </div>
+
         <!-- Empty state placeholder -->
-        <div id="empty-state" class="empty-state">
+        <div id="empty-state" class="empty-state hidden">
           <div class="empty-icon-svg">
             <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
           </div>
@@ -45,6 +52,32 @@
       </section>
     </div>
   </main>
+
+  <!-- Live Terminal Log Modal -->
+  <div id="logs-modal" class="modal" aria-hidden="true" role="dialog">
+    <div class="modal-backdrop"></div>
+    <div class="modal-content">
+      <div class="modal-header">
+        <div class="modal-title-group">
+          <span class="pulse-dot-building"></span>
+          <h3 id="modal-app-title">Logs: App Name</h3>
+        </div>
+        <button type="button" id="btn-close-modal" class="btn-close">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div id="terminal-console" class="terminal-console">
+          <!-- Websocket lines populate here -->
+        </div>
+      </div>
+      <div class="modal-footer">
+        <div class="footer-actions" style="display: flex; gap: 0.5rem;">
+          <button type="button" id="btn-modal-copy" class="btn btn-secondary btn-sm">Copy Logs</button>
+          <button type="button" id="btn-modal-clear" class="btn btn-secondary btn-sm">Clear Terminal</button>
+        </div>
+        <div class="terminal-status">Real-time Stream Connected</div>
+      </div>
+    </div>
+  </div>
 
   <footer class="app-footer">
     <div class="footer-container">

@@ -64,7 +64,8 @@ def verify_supabase_token(token: str) -> dict:
             token,
             jwt_secret,
             algorithms=["HS256"],
-            options={"verify_aud": False}
+            options={"verify_aud": False},
+            leeway=120
         )
         return decoded
         
@@ -86,7 +87,8 @@ def verify_supabase_token(token: str) -> dict:
             token,
             signing_key.key,
             algorithms=["ES256"],
-            options={"verify_aud": False}
+            options={"verify_aud": False},
+            leeway=120
         )
         return decoded
     else:

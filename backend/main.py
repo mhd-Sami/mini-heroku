@@ -16,8 +16,49 @@ import docker.errors
 from database import init_db, get_db, Deployment, SessionLocal, User, UserProfile
 from auth import get_current_user, hash_password, verify_password, create_access_token, SECRET_KEY, ALGORITHM, AUTH_MODE, security
 import jwt
+from auth_routes import router as auth_router
+
+_docker_client = None
+
+def get_docker_client():
+    global _docker_client
+    if _docker_client is None:
+        _docker_client = docker.from_env()
+    return _docker_client
+
+def heal_container_network(client, container):
+    try:
+        container.reload()
+        current_networks = container.attrs.get('NetworkSettings', {}).get('Networks', {})
+        try:
+            target_net = client.networks.get("mini-heroku-net")
+        except docker.errors.NotFound:
+            target_net = client.networks.create("mini-heroku-net", driver="bridge")
+            
+        connected = False
+        for net_name, net_info in current_networks.items():
+            if net_name == "mini-heroku-net":
+                try:
+                    actual_net = client.networks.get(net_info.get("NetworkID"))
+                    if actual_net.id == target_net.id:
+                        connected = True
+                except Exception:
+                    pass
+        
+        if not connected:
+            print(f"Healing network connection for container {container.name}", flush=True)
+            for net_name in list(current_networks.keys()):
+                try:
+                    client.networks.get(net_name).disconnect(container, force=True)
+                except Exception:
+                    pass
+            target_net.connect(container)
+            container.reload()
+    except Exception as e:
+        print(f"Warning: Failed to heal network for container {container.name}: {e}", flush=True)
 
 app = FastAPI(title="Mini-Heroku Orchestration API")
+app.include_router(auth_router)
 
 # Add CORS Middleware to support development testing
 app.add_middleware(
@@ -111,7 +152,7 @@ def deploy_app_task(
 
         # 3. Docker build
         log_message(app_name, "Dockerfile found. Starting BuildKit Docker image build...")
-        client = docker.from_env()
+        client = get_docker_client()
 
         # Connect network check
         try:
@@ -205,14 +246,6 @@ def deploy_app_task(
 # Pydantic schemas
 from pydantic import BaseModel
 
-class UserRegister(BaseModel):
-    username: str
-    password: str
-
-class UserLogin(BaseModel):
-    username: str
-    password: str
-
 class DeployRequest(BaseModel):
     app_name: str
     git_url: str
@@ -221,17 +254,12 @@ class DeployRequest(BaseModel):
     memory_limit: Optional[str] = None
     env_vars: Optional[Dict[str, str]] = None
 
-class ProfileCreate(BaseModel):
-    name: str
-    use_case: str
-    company: Optional[str] = None
-
 @app.on_event("startup")
 def startup_event():
     init_db()
     # Create the docker network on startup if it doesn't exist
     try:
-        client = docker.from_env()
+        client = get_docker_client()
         try:
             client.networks.get("mini-heroku-net")
             print("Docker network 'mini-heroku-net' connected.")
@@ -241,149 +269,12 @@ def startup_event():
     except Exception as e:
         print(f"Warning: could not initialize Docker network: {e}")
 
-# Authentication API Endpoints
-@app.get("/api/auth/config")
-def get_auth_config():
-    return {
-        "auth_mode": AUTH_MODE,
-        "supabase_config": {
-            "supabaseUrl": os.getenv("SUPABASE_URL"),
-            "supabaseAnonKey": os.getenv("SUPABASE_ANON_KEY")
-        } if AUTH_MODE == "supabase" else None
-    }
 
-@app.get("/api/auth/exists")
-def check_user_exists(username: str, db: Session = Depends(get_db)):
-    if AUTH_MODE == "local":
-        user_exists = db.query(User).filter(User.username == username).first() is not None
-        return {"exists": user_exists}
-    else:
-        email = username
-        if "@" not in email:
-            email = f"{username}@miniheroku.local"
-        try:
-            from sqlalchemy import text
-            result = db.execute(text("SELECT 1 FROM auth.users WHERE email = :email"), {"email": email}).first()
-            return {"exists": result is not None}
-        except Exception as e:
-            print(f"Warning: Failed to query auth.users directly: {e}. Falling back to UserProfile check.")
-            profile_exists = db.query(UserProfile).filter(
-                (UserProfile.email == email) | (UserProfile.id == username)
-            ).first() is not None
-            return {"exists": profile_exists}
-
-
-@app.get("/api/auth/profile")
-def get_profile(db: Session = Depends(get_db), current_uid: str = Depends(get_current_user)):
-    profile = db.query(UserProfile).filter(UserProfile.id == current_uid).first()
-    if not profile:
-        raise HTTPException(status_code=404, detail="Profile not found")
-    return {
-        "name": profile.name,
-        "use_case": profile.use_case,
-        "company": profile.company,
-        "email": profile.email
-    }
-
-@app.post("/api/auth/profile")
-def create_profile(
-    request: ProfileCreate, 
-    db: Session = Depends(get_db), 
-    credentials: HTTPAuthorizationCredentials = Depends(security),
-    current_uid: str = Depends(get_current_user)
-):
-    email = "unknown@miniheroku.local"
-    if AUTH_MODE == "local":
-        user = db.query(User).filter(User.id == int(current_uid)).first()
-        if user:
-            email = user.username
-    else:
-        try:
-            token = credentials.credentials
-            decoded = jwt.decode(token, options={"verify_signature": False})
-            email = decoded.get("email") or "unknown@miniheroku.local"
-        except Exception as e:
-            print(f"Error reading email from verified token: {e}", flush=True)
-            pass
-
-    existing = db.query(UserProfile).filter(UserProfile.id == current_uid).first()
-    if existing:
-        existing.name = request.name
-        existing.use_case = request.use_case
-        existing.company = request.company
-    else:
-        profile = UserProfile(
-            id=current_uid,
-            email=email,
-            name=request.name,
-            use_case=request.use_case,
-            company=request.company
-        )
-        db.add(profile)
-    db.commit()
-    return {"status": "success", "message": "Profile updated successfully"}
-
-@app.post("/api/auth/register")
-def register(request: UserRegister, db: Session = Depends(get_db)):
-    if AUTH_MODE != "local":
-        raise HTTPException(
-            status_code=400,
-            detail="Local registration is disabled in Supabase environment."
-        )
-    if not re.match("^[a-zA-Z0-9_-]{3,20}$", request.username):
-        raise HTTPException(
-            status_code=400,
-            detail="Username must be 3-20 characters long and contain only alphanumeric characters, underscores, or hyphens."
-        )
-    if len(request.password) < 6:
-        raise HTTPException(
-            status_code=400,
-            detail="Password must be at least 6 characters long."
-        )
-    
-    existing = db.query(User).filter(User.username == request.username).first()
-    if existing:
-        raise HTTPException(
-            status_code=400,
-            detail="Username already taken."
-        )
-    
-    hashed = hash_password(request.password)
-    user = User(username=request.username, hashed_password=hashed)
-    db.add(user)
-    db.commit()
-    return {"status": "success", "message": "User registered successfully"}
-
-@app.post("/api/auth/login")
-def login(request: UserLogin, db: Session = Depends(get_db)):
-    if AUTH_MODE != "local":
-        raise HTTPException(
-            status_code=400,
-            detail="Local login is disabled in Supabase environment."
-        )
-    user = db.query(User).filter(User.username == request.username).first()
-    if not user:
-        raise HTTPException(
-            status_code=404,
-            detail="No account exists"
-        )
-    if not verify_password(request.password, user.hashed_password):
-        raise HTTPException(
-            status_code=401,
-            detail="Incorrect username or password"
-        )
-    
-    access_token = create_access_token(data={"sub": user.username})
-    return {
-        "access_token": access_token,
-        "token_type": "bearer",
-        "username": user.username
-    }
 
 @app.get("/api/diagnose")
 def get_diagnose(current_uid: str = Depends(get_current_user)):
     try:
-        client = docker.from_env()
+        client = get_docker_client()
         networks = [
             {"name": net.name, "id": net.id, "driver": net.attrs.get("Driver")} 
             for net in client.networks.list()
@@ -406,7 +297,7 @@ def get_diagnose(current_uid: str = Depends(get_current_user)):
 @app.get("/api/traefik-logs")
 def get_traefik_logs(current_uid: str = Depends(get_current_user)):
     try:
-        client = docker.from_env()
+        client = get_docker_client()
         traefik = client.containers.get("mini-heroku-traefik")
         return {"logs": traefik.logs(tail=200).decode("utf-8", errors="ignore")}
     except Exception as e:
@@ -422,20 +313,26 @@ def list_apps(db: Session = Depends(get_db), current_uid: str = Depends(get_curr
         db.commit()
 
     deployments = db.query(Deployment).filter(Deployment.user_id == current_uid).all()
+    
+    # Query docker container statuses once to avoid loop-level API connections
+    container_status_map = {}
+    if any(d.status == "running" and d.container_id for d in deployments):
+        try:
+            client = get_docker_client()
+            containers = client.containers.list(all=True)
+            for c in containers:
+                container_status_map[c.name] = c.status
+        except Exception as e:
+            print(f"Error listing docker containers: {e}", flush=True)
+
     result = []
     for d in deployments:
         # Verify status against actual Docker container status if status is running
         actual_status = d.status
         if d.status == "running" and d.container_id:
-            try:
-                client = docker.from_env()
-                container = client.containers.get(d.app_name)
-                if container.status != "running":
-                    actual_status = "stopped"
-            except docker.errors.NotFound:
+            c_status = container_status_map.get(d.app_name)
+            if c_status != "running":
                 actual_status = "stopped"
-            except Exception:
-                pass
         
         result.append({
             "id": d.id,
@@ -470,7 +367,7 @@ def deploy_app(
     existing = db.query(Deployment).filter(Deployment.app_name == app_name).first()
     if existing:
         # Check ownership
-        if existing.user_id is not None and existing.user_id != current_uid:
+        if existing.user_id is not None and str(existing.user_id) != str(current_uid):
             raise HTTPException(
                 status_code=403,
                 detail="Application name already taken by another user."
@@ -528,7 +425,7 @@ def start_app(app_name: str, db: Session = Depends(get_db), current_uid: str = D
     if not deployment:
         raise HTTPException(status_code=404, detail="App not found")
     
-    if deployment.user_id is not None and deployment.user_id != current_uid:
+    if deployment.user_id is not None and str(deployment.user_id) != str(current_uid):
         raise HTTPException(status_code=403, detail="Permission denied")
     
     if deployment.user_id is None:
@@ -536,8 +433,9 @@ def start_app(app_name: str, db: Session = Depends(get_db), current_uid: str = D
         db.commit()
     
     try:
-        client = docker.from_env()
+        client = get_docker_client()
         container = client.containers.get(app_name)
+        heal_container_network(client, container)
         container.start()
         deployment.status = "running"
         db.commit()
@@ -554,7 +452,7 @@ def stop_app(app_name: str, db: Session = Depends(get_db), current_uid: str = De
     if not deployment:
         raise HTTPException(status_code=404, detail="App not found")
     
-    if deployment.user_id is not None and deployment.user_id != current_uid:
+    if deployment.user_id is not None and str(deployment.user_id) != str(current_uid):
         raise HTTPException(status_code=403, detail="Permission denied")
     
     if deployment.user_id is None:
@@ -562,7 +460,7 @@ def stop_app(app_name: str, db: Session = Depends(get_db), current_uid: str = De
         db.commit()
     
     try:
-        client = docker.from_env()
+        client = get_docker_client()
         container = client.containers.get(app_name)
         container.stop(timeout=5)
         deployment.status = "stopped"
@@ -582,7 +480,7 @@ def restart_app(app_name: str, db: Session = Depends(get_db), current_uid: str =
     if not deployment:
         raise HTTPException(status_code=404, detail="App not found")
     
-    if deployment.user_id is not None and deployment.user_id != current_uid:
+    if deployment.user_id is not None and str(deployment.user_id) != str(current_uid):
         raise HTTPException(status_code=403, detail="Permission denied")
     
     if deployment.user_id is None:
@@ -590,8 +488,9 @@ def restart_app(app_name: str, db: Session = Depends(get_db), current_uid: str =
         db.commit()
     
     try:
-        client = docker.from_env()
+        client = get_docker_client()
         container = client.containers.get(app_name)
+        heal_container_network(client, container)
         container.restart()
         deployment.status = "running"
         db.commit()
@@ -608,7 +507,7 @@ def delete_app(app_name: str, db: Session = Depends(get_db), current_uid: str = 
     if not deployment:
         raise HTTPException(status_code=404, detail="App not found")
     
-    if deployment.user_id is not None and deployment.user_id != current_uid:
+    if deployment.user_id is not None and str(deployment.user_id) != str(current_uid):
         raise HTTPException(status_code=403, detail="Permission denied")
     
     if deployment.user_id is None:
@@ -616,7 +515,7 @@ def delete_app(app_name: str, db: Session = Depends(get_db), current_uid: str = 
         db.commit()
     
     try:
-        client = docker.from_env()
+        client = get_docker_client()
         try:
             container = client.containers.get(app_name)
             container.stop(timeout=5)
@@ -645,7 +544,7 @@ def get_app_stats(app_name: str, db: Session = Depends(get_db), current_uid: str
     if not deployment:
         raise HTTPException(status_code=404, detail="App not found")
 
-    if deployment.user_id is not None and deployment.user_id != current_uid:
+    if deployment.user_id is not None and str(deployment.user_id) != str(current_uid):
         raise HTTPException(status_code=403, detail="Permission denied")
 
     if deployment.user_id is None:
@@ -662,7 +561,7 @@ def get_app_stats(app_name: str, db: Session = Depends(get_db), current_uid: str
         }
 
     try:
-        client = docker.from_env()
+        client = get_docker_client()
         container = client.containers.get(app_name)
         
         # Non-streaming statistics query
@@ -776,7 +675,7 @@ async def websocket_logs(websocket: WebSocket, app_name: str, token: Optional[st
             await websocket.close(code=1008)
             return
 
-        if deployment.user_id is not None and deployment.user_id != uid:
+        if deployment.user_id is not None and str(deployment.user_id) != str(uid):
             await websocket.send_text("[UI-CLIENT] Access denied.")
             await websocket.close(code=1008)
             return
@@ -806,7 +705,7 @@ async def websocket_logs(websocket: WebSocket, app_name: str, token: Optional[st
     # Stream running container logs as fallback if build log is empty and app is running
     if not logs:
         try:
-            client = docker.from_env()
+            client = get_docker_client()
             container = client.containers.get(app_name)
             # Retrieve last 50 lines
             logs_content = container.logs(tail=50, stdout=True, stderr=True).decode('utf-8', errors='ignore')

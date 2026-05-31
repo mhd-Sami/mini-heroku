@@ -3,11 +3,31 @@ from datetime import datetime
 from sqlalchemy import create_engine, Column, Integer, String, Float, Text, DateTime, ForeignKey, text, inspect
 from sqlalchemy.orm import declarative_base, sessionmaker, relationship
 
-DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./data/mini_heroku.db")
+from urllib.parse import quote_plus, unquote
 
-# SQLAlchemy requires postgresql:// instead of postgres://
-if DATABASE_URL.startswith("postgres://"):
-    DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
+def sanitize_database_url(url: str) -> str:
+    if not url:
+        return url
+    if url.startswith("postgres://"):
+        url = url.replace("postgres://", "postgresql://", 1)
+    if url.startswith("sqlite"):
+        return url
+    try:
+        if "://" in url:
+            scheme, rest = url.split("://", 1)
+            if "@" in rest:
+                credentials, host_part = rest.rsplit("@", 1)
+                if ":" in credentials:
+                    username, password = credentials.split(":", 1)
+                    escaped_password = quote_plus(unquote(password))
+                    credentials = f"{username}:{escaped_password}"
+                host_part = host_part.replace("[", "").replace("]", "")
+                url = f"{scheme}://{credentials}@{host_part}"
+    except Exception as e:
+        print(f"Warning: Failed to sanitize database URL: {e}")
+    return url
+
+DATABASE_URL = sanitize_database_url(os.getenv("DATABASE_URL", "sqlite:///./data/mini_heroku.db"))
 
 # Create parent directories for sqlite db if they don't exist
 if DATABASE_URL.startswith("sqlite"):
@@ -32,7 +52,6 @@ class User(Base):
     hashed_password = Column(String, nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow)
 
-    deployments = relationship("Deployment", back_populates="user", cascade="all, delete-orphan")
 
 class UserProfile(Base):
     __tablename__ = "user_profiles"
@@ -40,6 +59,7 @@ class UserProfile(Base):
     id = Column(String, primary_key=True, index=True) # Supabase UID or local user ID
     email = Column(String, nullable=False)
     name = Column(String, nullable=False)
+    username = Column(String, unique=True, nullable=True)
     use_case = Column(String, nullable=False)
     company = Column(String, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
@@ -58,9 +78,7 @@ class Deployment(Base):
     env_vars = Column(Text, nullable=True)       # Serialized JSON string of environmental variables
     container_id = Column(String, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
-    user_id = Column(String, ForeignKey("users.id"), nullable=True)
-
-    user = relationship("User", back_populates="deployments")
+    user_id = Column(String, nullable=True)
 
 def init_db():
     Base.metadata.create_all(bind=engine)
