@@ -252,6 +252,27 @@ def get_auth_config():
         } if AUTH_MODE == "supabase" else None
     }
 
+@app.get("/api/auth/exists")
+def check_user_exists(username: str, db: Session = Depends(get_db)):
+    if AUTH_MODE == "local":
+        user_exists = db.query(User).filter(User.username == username).first() is not None
+        return {"exists": user_exists}
+    else:
+        email = username
+        if "@" not in email:
+            email = f"{username}@miniheroku.local"
+        try:
+            from sqlalchemy import text
+            result = db.execute(text("SELECT 1 FROM auth.users WHERE email = :email"), {"email": email}).first()
+            return {"exists": result is not None}
+        except Exception as e:
+            print(f"Warning: Failed to query auth.users directly: {e}. Falling back to UserProfile check.")
+            profile_exists = db.query(UserProfile).filter(
+                (UserProfile.email == email) | (UserProfile.id == username)
+            ).first() is not None
+            return {"exists": profile_exists}
+
+
 @app.get("/api/auth/profile")
 def get_profile(db: Session = Depends(get_db), current_uid: str = Depends(get_current_user)):
     profile = db.query(UserProfile).filter(UserProfile.id == current_uid).first()
@@ -341,7 +362,12 @@ def login(request: UserLogin, db: Session = Depends(get_db)):
             detail="Local login is disabled in Supabase environment."
         )
     user = db.query(User).filter(User.username == request.username).first()
-    if not user or not verify_password(request.password, user.hashed_password):
+    if not user:
+        raise HTTPException(
+            status_code=404,
+            detail="No account exists"
+        )
+    if not verify_password(request.password, user.hashed_password):
         raise HTTPException(
             status_code=401,
             detail="Incorrect username or password"

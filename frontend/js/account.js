@@ -65,7 +65,7 @@ function initializeSupabase(supabaseConfig) {
           resetError.classList.add('hidden');
           try {
             const { error } = await supabase.auth.resetPasswordForEmail(user.email, {
-              redirectTo: `${window.location.origin}/login.html`
+              redirectTo: `${window.location.origin}/auth/login.html`
             });
             if (error) throw error;
             resetSuccess.textContent = `A password reset email has been sent to ${user.email}. Check your inbox.`;
@@ -78,7 +78,7 @@ function initializeSupabase(supabaseConfig) {
           }
         };
       } else {
-        window.location.href = 'login.html';
+        window.location.href = '/auth/login.html';
       }
     });
   } catch (e) {

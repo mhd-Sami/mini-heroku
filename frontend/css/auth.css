@@ -1,0 +1,630 @@
+/* ==========================================================================
+   VESSEL DESIGN SYSTEM — AUTHENTICATION & LOGIN PAGE
+   ========================================================================== */
+
+/* Full Screen Container */
+.auth-container {
+  display: grid;
+  grid-template-columns: 1.1fr 1fr;
+  height: 100vh;
+  max-height: 100vh;
+  width: 100%;
+  position: relative;
+  background: var(--color-bg-base);
+  overflow: hidden;
+}
+
+@media (max-width: 1024px) {
+  .auth-container {
+    grid-template-columns: 1fr;
+    height: auto;
+    max-height: none;
+    overflow: auto;
+  }
+}
+
+/* ── MindNest Background Effects ────────────────────────────── */
+.hero-orb {
+  position: absolute;
+  border-radius: 50%;
+  pointer-events: none;
+  filter: blur(140px);
+  background: conic-gradient(from 0deg, rgba(37, 41, 43, 0.12) 0%, rgba(56, 189, 248, 0.15) 33%, rgba(52, 211, 153, 0.1) 66%, rgba(37, 41, 43, 0.12) 100%);
+  width: 600px;
+  height: 600px;
+  top: -150px;
+  left: 20%;
+  animation: orb-breathe 10s ease-in-out infinite alternate, orb-spin 40s linear infinite;
+  z-index: 1;
+}
+
+.zen-backdrop {
+  position: absolute;
+  pointer-events: none;
+  z-index: 1;
+  border-radius: 50%;
+  filter: blur(120px);
+  opacity: 0.7;
+}
+.zen-backdrop-1 {
+  width: 350px;
+  height: 350px;
+  top: 15%;
+  left: -50px;
+  background: rgba(56, 189, 248, 0.15);
+  animation: aura-breathe 8s ease-in-out infinite alternate;
+}
+.zen-backdrop-2 {
+  width: 450px;
+  height: 450px;
+  bottom: 10%;
+  right: -100px;
+  background: rgba(37, 41, 43, 0.12);
+  animation: aura-breathe 12s ease-in-out infinite alternate-reverse;
+}
+
+@keyframes orb-breathe {
+  0% { transform: scale(0.92); opacity: 0.4; }
+  100% { transform: scale(1.08); opacity: 0.85; }
+}
+@keyframes orb-spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+@keyframes aura-breathe {
+  0% { transform: scale(0.9); }
+  100% { transform: scale(1.1); }
+}
+
+/* Floating Particles */
+.ambient-particles {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  overflow: hidden;
+  z-index: 1;
+}
+.particle {
+  position: absolute;
+  border-radius: 50%;
+  background: var(--color-accent);
+  filter: blur(1.5px);
+  opacity: 0;
+  animation: float-up linear infinite;
+}
+.p1 { width: 6px; height: 6px; left: 15%; bottom: -10px; animation-delay: 0s; animation-duration: 25s; }
+.p2 { width: 4px; height: 4px; left: 65%; bottom: -10px; animation-delay: 5s; animation-duration: 30s; background: #10b981; }
+.p3 { width: 8px; height: 8px; left: 85%; bottom: -10px; animation-delay: 12s; animation-duration: 38s; opacity: 0.4; }
+.p4 { width: 5px; height: 5px; left: 45%; bottom: -10px; animation-delay: 17s; animation-duration: 22s; background: var(--color-primary-light); }
+.p5 { width: 7px; height: 7px; left: 25%; bottom: -10px; animation-delay: 8s; animation-duration: 33s; background: #10b981; }
+.p6 { width: 5px; height: 5px; left: 75%; bottom: -10px; animation-delay: 24s; animation-duration: 28s; background: #818cf8; }
+
+@keyframes float-up {
+  0% { transform: translateY(0) translateX(0) rotate(0deg); opacity: 0; }
+  10% { opacity: 0.35; }
+  90% { opacity: 0.35; }
+  100% { transform: translateY(-105vh) translateX(60px) rotate(360deg); opacity: 0; }
+}
+
+
+/* ── Left Column (Tech Promo Panel) ────────────────────────── */
+.auth-promo-panel {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  padding: 3rem;
+  background-color: #f8fafc;
+  background-image: radial-gradient(#cbd5e1 1.2px, transparent 1.2px);
+  background-size: 24px 24px;
+  border-right: 1px solid var(--color-bg-alt);
+  position: relative;
+  z-index: 2;
+  height: 100vh;
+  max-height: 100vh;
+  overflow: hidden;
+}
+
+@media (max-width: 1024px) {
+  .auth-promo-panel {
+    display: none; /* Hide on smaller screens to prioritize forms */
+  }
+}
+
+.promo-header {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.promo-logo {
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+}
+
+.promo-logo-img {
+  height: 84px;
+  width: auto;
+  object-fit: contain;
+}
+
+.promo-visuals {
+  display: flex;
+  flex-direction: column;
+  gap: 2rem;
+  margin: auto 0;
+}
+
+/* CLI Terminal Simulator Mockup */
+.terminal-mockup {
+  background-color: #0f172a; /* Graphite Dark */
+  border-radius: var(--radius-md);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: 0 20px 40px rgba(15, 23, 42, 0.3);
+  overflow: hidden;
+  width: 100%;
+  max-width: 520px;
+  font-family: var(--font-family-mono);
+  font-size: 0.85rem;
+}
+
+.terminal-header {
+  background-color: #1e293b;
+  padding: 0.75rem 1rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.terminal-header .dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  display: inline-block;
+}
+.terminal-header .dot.red { background-color: #ef4444; }
+.terminal-header .dot.yellow { background-color: #f59e0b; }
+.terminal-header .dot.green { background-color: #10b981; }
+
+.terminal-title {
+  color: #94a3b8;
+  margin-left: 0.5rem;
+  font-size: 0.75rem;
+  font-weight: 500;
+}
+
+.terminal-body-mock {
+  padding: 1.25rem;
+  color: #e2e8f0;
+  line-height: 1.5;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  height: 250px;
+  overflow-y: auto;
+}
+
+/* Custom Scrollbar for Terminal Mockup */
+.terminal-body-mock::-webkit-scrollbar {
+  width: 8px;
+}
+.terminal-body-mock::-webkit-scrollbar-track {
+  background: #1e293b;
+}
+.terminal-body-mock::-webkit-scrollbar-thumb {
+  background: #475569;
+  border-radius: var(--radius-sm);
+}
+.terminal-body-mock::-webkit-scrollbar-thumb:hover {
+  background: #64748b;
+}
+
+.terminal-line {
+  opacity: 0;
+  transform: translateY(4px);
+  transition: opacity 0.3s ease-out, transform 0.3s ease-out;
+}
+
+/* Typographic utility states */
+.t-cyan { color: #22d3ee; }
+.t-green { color: #34d399; }
+.t-yellow { color: #fbbf24; }
+.t-purple { color: #c084fc; }
+.t-blue { color: #60a5fa; }
+.t-indigo { color: #818cf8; }
+.t-gray { color: #64748b; }
+.t-underline { text-decoration: underline; }
+.t-bold { font-weight: bold; }
+.terminal-line-indent {
+  padding-left: 1.25rem;
+  opacity: 0;
+  transform: translateY(4px);
+  animation: line-reveal 0.35s ease-out forwards;
+}
+.terminal-line-indent:nth-child(11) { animation-delay: 6.4s; }
+.terminal-line-indent:nth-child(12) { animation-delay: 6.6s; }
+
+/* Telemetry Stats preview cards */
+.stats-preview-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1.25rem;
+  max-width: 520px;
+}
+
+.stat-bubble {
+  background-color: #0f172a; /* Graphite Dark matching terminal */
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: var(--radius-md);
+  padding: 1.25rem;
+  box-shadow: 0 10px 25px rgba(15, 23, 42, 0.15);
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  transition: transform var(--transition-normal), box-shadow var(--transition-normal);
+}
+
+.stat-bubble:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 15px 30px rgba(15, 23, 42, 0.25);
+  border-color: rgba(255, 255, 255, 0.15);
+}
+
+.bubble-title {
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #94a3b8; /* Muted matching terminal title */
+}
+
+.bubble-value-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.bubble-value {
+  font-family: var(--font-family-title);
+  font-size: 1.35rem;
+  font-weight: 800;
+  color: #ffffff; /* White value text */
+}
+
+.badge {
+  font-size: 0.7rem;
+  font-weight: 700;
+  padding: 0.2rem 0.5rem;
+  border-radius: var(--radius-full);
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+}
+
+.badge-success {
+  background-color: var(--color-success-bg);
+  color: var(--color-success);
+}
+.badge-info {
+  background-color: var(--color-info-bg);
+  color: var(--color-info);
+}
+
+.sparkline {
+  display: flex;
+  align-items: flex-end;
+  gap: 4px;
+  height: 24px;
+  width: 100%;
+  margin-top: 0.25rem;
+}
+
+.sparkline-bar {
+  flex: 1;
+  background-color: var(--color-primary-light);
+  border-radius: 2px 2px 0 0;
+  opacity: 0.85;
+}
+
+/* Oscillating heights animation keyframes */
+@keyframes oscillate {
+  0% { height: 30%; }
+  50% { height: 85%; }
+  100% { height: 30%; }
+}
+@keyframes oscillate-reverse {
+  0% { height: 75%; }
+  50% { height: 25%; }
+  100% { height: 75%; }
+}
+
+.sparkline-bar.bar-1 { animation: oscillate 2s ease-in-out infinite; height: 40%; }
+.sparkline-bar.bar-2 { animation: oscillate 1.6s ease-in-out infinite 0.2s; height: 60%; }
+.sparkline-bar.bar-3 { animation: oscillate 2.4s ease-in-out infinite 0.4s; height: 35%; }
+.sparkline-bar.bar-4 { animation: oscillate-reverse 1.8s ease-in-out infinite 0.1s; height: 70%; }
+.sparkline-bar.bar-5 { animation: oscillate 2.1s ease-in-out infinite 0.3s; height: 50%; }
+.sparkline-bar.bar-6 { animation: oscillate-reverse 1.5s ease-in-out infinite 0.5s; height: 80%; }
+.sparkline-bar.bar-7 { animation: oscillate 2.5s ease-in-out infinite; height: 45%; }
+
+.sparkline-bar.bar-8 { animation: oscillate-reverse 2.2s ease-in-out infinite 0.3s; height: 75%; background-color: var(--color-accent); }
+.sparkline-bar.bar-9 { animation: oscillate 1.8s ease-in-out infinite 0.1s; height: 40%; background-color: var(--color-accent); }
+.sparkline-bar.bar-10 { animation: oscillate-reverse 2.6s ease-in-out infinite 0.5s; height: 65%; background-color: var(--color-accent); }
+.sparkline-bar.bar-11 { animation: oscillate 1.4s ease-in-out infinite 0.2s; height: 80%; background-color: var(--color-accent); }
+.sparkline-bar.bar-12 { animation: oscillate-reverse 2s ease-in-out infinite 0.4s; height: 30%; background-color: var(--color-accent); }
+.sparkline-bar.bar-13 { animation: oscillate 2.3s ease-in-out infinite 0.1s; height: 55%; background-color: var(--color-accent); }
+.sparkline-bar.bar-14 { animation: oscillate-reverse 1.7s ease-in-out infinite 0.3s; height: 90%; background-color: var(--color-accent); }
+
+.promo-footer {
+  font-size: 0.8rem;
+  color: var(--color-text-muted);
+  line-height: 1.4;
+  border-top: 1px solid var(--color-bg-alt);
+  padding-top: 1rem;
+  max-width: 520px;
+}
+
+
+/* ── Right Column (Forms Panel) ────────────────────────────── */
+.auth-form-panel {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2rem;
+  background-color: #ffffff; /* Contrast pure white side */
+  position: relative;
+  z-index: 2;
+  height: 100vh;
+  max-height: 100vh;
+  overflow-y: auto;
+}
+
+@media (max-width: 1024px) {
+  .auth-form-panel {
+    height: auto;
+    max-height: none;
+    padding: 3rem 1.5rem;
+  }
+}
+
+/* Glassmorphic Auth Card */
+.auth-card {
+  background: rgba(255, 255, 255, 0.85);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+  border-radius: var(--radius-lg);
+  border: 1px solid rgba(255, 255, 255, 0.6);
+  box-shadow: var(--shadow-premium);
+  padding: 3rem 2.5rem;
+  width: 100%;
+  max-width: 440px;
+  display: flex;
+  flex-direction: column;
+  gap: 1.75rem;
+  animation: authCardIn 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+@keyframes authCardIn {
+  from { opacity: 0; transform: translateY(16px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.auth-logo-group {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+  margin-bottom: 0.25rem;
+}
+
+.auth-logo-img {
+  height: 96px;
+  width: auto;
+  object-fit: contain;
+  margin: 0 auto;
+  display: block;
+}
+
+/* Tab Switcher */
+.auth-tabs {
+  display: flex;
+  background-color: rgba(226, 232, 240, 0.6);
+  border: 1px solid rgba(226, 232, 240, 0.8);
+  padding: 0.25rem;
+  border-radius: var(--radius-sm);
+  gap: 0.25rem;
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.02);
+}
+
+.auth-tab-btn {
+  flex: 1;
+  background: none;
+  border: none;
+  padding: 0.65rem;
+  font-family: var(--font-family-sans);
+  font-weight: 600;
+  font-size: 0.85rem;
+  color: var(--color-text-muted);
+  cursor: pointer;
+  border-radius: 6px;
+  transition: all var(--transition-fast);
+}
+
+.auth-tab-btn:hover {
+  color: var(--color-primary);
+}
+
+.auth-tab-btn.active {
+  background-color: var(--color-bg-surface);
+  color: var(--color-primary);
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.03), 0 1px 3px rgba(0, 0, 0, 0.02);
+}
+
+/* Input Fields overrides */
+.auth-form {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+.auth-form .form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.auth-form label {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--color-text-main);
+  letter-spacing: 0.02em;
+}
+
+.auth-form input[type="text"],
+.auth-form input[type="password"],
+.auth-form input[type="email"] {
+  width: 100%;
+  height: 2.85rem;
+  padding: 0 1rem;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--color-bg-alt);
+  background-color: var(--color-bg-surface);
+  color: var(--color-text-main);
+  font-family: var(--font-family-sans);
+  font-size: 0.9rem;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.01);
+  transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
+}
+
+.auth-form input:focus {
+  outline: none;
+  border-color: var(--color-primary-light);
+  box-shadow: 0 0 0 4px rgba(37, 41, 43, 0.12);
+}
+
+.auth-form .input-hint {
+  font-size: 0.75rem;
+  color: var(--color-text-muted);
+  line-height: 1.3;
+}
+
+/* Buttons */
+.auth-form .btn-primary {
+  height: 2.85rem;
+  background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary-light) 100%);
+  color: var(--color-text-light);
+  border-radius: var(--radius-sm);
+  font-weight: 600;
+  font-size: 0.92rem;
+  border: none;
+  box-shadow: 0 4px 12px rgba(37, 41, 43, 0.25);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.auth-form .btn-primary:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 16px rgba(37, 41, 43, 0.35);
+  background: linear-gradient(135deg, var(--color-primary-hover) 0%, var(--color-primary) 100%);
+}
+
+.auth-form .btn-primary:active {
+  transform: translateY(1px);
+}
+
+.auth-form .btn-primary:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}
+
+/* Secondary Button (for email verification screen) */
+.auth-form .btn-secondary {
+  height: 2.85rem;
+  background-color: var(--color-bg-cream);
+  color: var(--color-text-main);
+  border-color: var(--color-bg-alt);
+  font-weight: 600;
+  font-size: 0.9rem;
+  box-shadow: none;
+}
+
+.auth-form .btn-secondary:hover {
+  background-color: var(--color-bg-alt);
+}
+
+/* Messages */
+.auth-message {
+  font-size: 0.8rem;
+  padding: 0.75rem 1rem;
+  border-radius: var(--radius-sm);
+  line-height: 1.45;
+  margin-top: 0.25rem;
+  font-weight: 500;
+}
+
+.error-message {
+  background-color: var(--color-danger-bg);
+  color: var(--color-danger);
+  border: 1px solid rgba(239, 68, 68, 0.15);
+}
+
+.success-message {
+  background-color: var(--color-success-bg);
+  color: var(--color-success);
+  border: 1px solid rgba(16, 185, 129, 0.15);
+}
+
+/* Global Session profile bar adjustments in common layout if applicable */
+.username-display {
+  font-weight: 600;
+  color: var(--color-primary);
+}
+
+.empty-icon-svg {
+  stroke: var(--color-primary);
+}
+
+/* Base Body Layout Override for Auth views */
+.auth-body-layout {
+  height: 100vh;
+  max-height: 100vh;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-start;
+  align-items: stretch;
+  background: var(--color-bg-base);
+}
+
+.auth-body-layout .auth-view {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  max-height: 100vh;
+  padding: 0;
+  background: none;
+  overflow: hidden;
+}
+
+/* Utility Link Customizations */
+.utility-link {
+  font-size: 0.85rem;
+  font-weight: 500;
+  color: var(--color-primary);
+  text-decoration: none;
+  transition: color var(--transition-fast);
+}
+
+.utility-link:hover {
+  color: var(--color-primary-hover);
+  text-decoration: underline;
+}
+
+.auth-card-footer .utility-link {
+  font-weight: 600;
+}

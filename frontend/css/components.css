@@ -1,0 +1,372 @@
+/* ==========================================================================
+   VESSEL DESIGN SYSTEM — REUSABLE COMPONENTS
+   ========================================================================== */
+
+/* ── Forms Inputs & Labels ────────────────────────────────── */
+label {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--color-text-main);
+}
+
+input[type="text"],
+input[type="number"],
+input[type="url"],
+input[type="email"] {
+  width: 100%;
+  padding: 0.75rem 1rem;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--color-bg-alt);
+  background-color: var(--color-bg-cream);
+  font-family: var(--font-family-sans);
+  font-size: 0.9rem;
+  color: var(--color-text-main);
+  transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
+}
+
+input:focus {
+  outline: none;
+  border-color: var(--color-primary-light);
+  box-shadow: 0 0 0 3px rgba(37, 41, 43, 0.12);
+}
+
+.input-hint {
+  font-size: 0.75rem;
+  color: var(--color-text-muted);
+}
+
+/* Dynamic Env Vars list input row */
+.env-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin-bottom: 0.5rem;
+}
+
+.env-row {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.env-row input {
+  flex: 1;
+}
+
+.btn-remove-env {
+  background: none;
+  border: none;
+  color: var(--color-danger);
+  font-size: 1.25rem;
+  cursor: pointer;
+  padding: 0 0.5rem;
+  line-height: 1;
+  transition: color var(--transition-fast);
+}
+
+.btn-remove-env:hover {
+  color: #a51d1d;
+}
+
+
+/* ── Buttons ────────────────────────────────────────────── */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-family-sans);
+  font-weight: 600;
+  font-size: 0.9rem;
+  padding: 0.75rem 1.25rem;
+  border-radius: var(--radius-sm);
+  border: 1px solid transparent;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.btn-block {
+  display: flex;
+  width: 100%;
+}
+
+.btn-primary {
+  background-color: var(--color-primary);
+  color: var(--color-text-light);
+  box-shadow: 0 4px 6px rgba(37, 41, 43, 0.15);
+}
+
+.btn-primary:hover {
+  background-color: var(--color-primary-light);
+  transform: translateY(-1px);
+  box-shadow: 0 6px 12px rgba(37, 41, 43, 0.2);
+}
+
+.btn-primary:active {
+  transform: translateY(0);
+}
+
+.btn-secondary {
+  background-color: var(--color-bg-base);
+  color: var(--color-primary-light);
+  border-color: var(--color-bg-alt);
+}
+
+.btn-secondary:hover {
+  background-color: var(--color-bg-alt);
+  color: var(--color-primary-hover);
+}
+
+.btn-sm {
+  padding: 0.4rem 0.8rem;
+  font-size: 0.8rem;
+  border-radius: var(--radius-sm);
+}
+
+.btn-danger-outline {
+  background: none;
+  border: 1px solid rgba(229, 62, 98, 0.3);
+  color: var(--color-danger);
+}
+
+.btn-danger-outline:hover {
+  background-color: var(--color-danger-bg);
+  border-color: var(--color-danger);
+}
+
+
+/* ── Badges, Indicators, and Empty States ────────────────── */
+.hidden {
+  display: none !important;
+}
+
+/* Status Badges */
+.status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.25rem 0.75rem;
+  border-radius: var(--radius-full);
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.status-badge.running {
+  background-color: var(--color-success-bg);
+  color: var(--color-success);
+}
+.status-badge.building {
+  background-color: var(--color-info-bg);
+  color: var(--color-info);
+}
+.status-badge.stopped {
+  background-color: var(--color-bg-alt);
+  color: var(--color-text-muted);
+}
+.status-badge.failed {
+  background-color: var(--color-danger-bg);
+  color: var(--color-danger);
+}
+
+/* Pulsing indicators */
+.pulse-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background-color: currentColor;
+  display: inline-block;
+}
+
+.status-badge.running .pulse-dot {
+  animation: pulse-green 1.5s infinite;
+}
+
+.status-badge.building .pulse-dot {
+  animation: pulse-blue 1s infinite alternate;
+}
+
+@keyframes pulse-green {
+  0% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.4); }
+  70% { box-shadow: 0 0 0 6px rgba(16, 185, 129, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0); }
+}
+
+@keyframes pulse-blue {
+  0% { opacity: 0.3; }
+  100% { opacity: 1; }
+}
+
+/* Empty State Styling */
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 4rem 2rem;
+  background-color: var(--color-bg-cream);
+  border: 2px dashed var(--color-bg-alt);
+  border-radius: var(--radius-lg);
+}
+
+.empty-icon {
+  font-size: 3rem;
+  margin-bottom: 1rem;
+}
+
+.empty-state h3 {
+  font-family: var(--font-family-title);
+  color: var(--color-primary);
+  margin-bottom: 0.5rem;
+}
+
+.empty-state p {
+  color: var(--color-text-muted);
+  font-size: 0.9rem;
+  max-width: 320px;
+}
+
+
+/* ── Modals & CLI Logs Console Overlay ────────────────────── */
+.modal {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--transition-normal);
+}
+
+.modal.active {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.modal-backdrop {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(15, 23, 42, 0.4);
+  backdrop-filter: blur(4px);
+}
+
+.modal-content {
+  position: relative;
+  background-color: var(--color-bg-surface);
+  border-radius: var(--radius-lg);
+  width: 90%;
+  max-width: 800px;
+  max-height: 85vh;
+  box-shadow: var(--shadow-premium);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid var(--color-bg-alt);
+  z-index: 1001;
+  transform: scale(0.95);
+  transition: transform var(--transition-normal);
+}
+
+.modal.active .modal-content {
+  transform: scale(1);
+}
+
+.modal-header {
+  padding: 1.25rem 1.5rem;
+  border-bottom: 1px solid var(--color-bg-alt);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background-color: var(--color-bg-cream);
+}
+
+.modal-title-group {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.modal-header h3 {
+  font-family: var(--font-family-title);
+  color: var(--color-primary);
+  font-size: 1.25rem;
+  font-weight: 700;
+}
+
+.pulse-dot-building {
+  width: 10px;
+  height: 10px;
+  background-color: var(--color-info);
+  border-radius: 50%;
+  animation: pulse-blue 1s infinite alternate;
+}
+
+.btn-close {
+  background: none;
+  border: none;
+  font-size: 1.75rem;
+  cursor: pointer;
+  color: var(--color-text-muted);
+  line-height: 1;
+  transition: color var(--transition-fast);
+}
+
+.btn-close:hover {
+  color: var(--color-danger);
+}
+
+.modal-body {
+  padding: 1.5rem;
+  overflow: hidden;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  background-color: #0f172a; /* Slate 900 for dark CLI look */
+}
+
+/* Terminal Console styling */
+.terminal-console {
+  font-family: var(--font-family-mono);
+  font-size: 0.85rem;
+  color: #f1f5f9; /* Slate 100 */
+  white-space: pre-wrap;
+  word-break: break-all;
+  overflow-y: auto;
+  flex: 1;
+  height: 450px;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+/* Terminal scrollbar customizations */
+.terminal-console::-webkit-scrollbar {
+  width: 8px;
+}
+.terminal-console::-webkit-scrollbar-track {
+  background: #1e293b;
+}
+.terminal-console::-webkit-scrollbar-thumb {
+  background: #475569;
+  border-radius: var(--radius-sm);
+}
+
+.modal-footer {
+  padding: 1rem 1.5rem;
+  border-top: 1px solid var(--color-bg-alt);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background-color: var(--color-bg-cream);
+  font-size: 0.8rem;
+  color: var(--color-text-muted);
+}

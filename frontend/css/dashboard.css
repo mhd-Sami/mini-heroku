@@ -1,0 +1,436 @@
+/* ==========================================================================
+   VESSEL DESIGN SYSTEM — DASHBOARD & SPECIFICATIONS VIEWS
+   ========================================================================== */
+
+/* ── Metrics Summary Cards ────────────────────────────────── */
+.metrics-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 1.5rem;
+}
+
+.metric-card {
+  background-color: var(--color-bg-surface);
+  border-radius: var(--radius-md);
+  padding: 1.5rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border: 1px solid var(--color-bg-alt);
+  box-shadow: var(--shadow-sm);
+  transition: transform var(--transition-normal), box-shadow var(--transition-normal);
+}
+
+.metric-card:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-md);
+}
+
+.metric-info {
+  display: flex;
+  flex-direction: column;
+}
+
+.metric-title {
+  font-size: 0.85rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--color-text-muted);
+}
+
+.metric-value {
+  font-family: var(--font-family-title);
+  font-size: 2rem;
+  font-weight: 800;
+  color: var(--color-primary);
+  margin-top: 0.25rem;
+}
+
+.metric-icon {
+  width: 48px;
+  height: 48px;
+  border-radius: var(--radius-md);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.5rem;
+}
+
+.teal-bg { background-color: var(--color-accent-soft); }
+.green-bg { background-color: var(--color-success-bg); }
+.beige-bg { background-color: var(--color-bg-cream); }
+
+
+/* ── Workspace Panels & Deployment Form ────────────────────── */
+.workspace-grid {
+  display: grid;
+  grid-template-columns: 380px 1fr;
+  gap: 2rem;
+  align-items: start;
+}
+
+@media (max-width: 992px) {
+  .workspace-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.workspace-card {
+  background-color: var(--color-bg-surface);
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--color-bg-alt);
+  box-shadow: var(--shadow-md);
+  padding: 2rem;
+  transition: box-shadow var(--transition-normal);
+}
+
+.workspace-card:hover {
+  box-shadow: var(--shadow-lg);
+}
+
+.card-header {
+  margin-bottom: 1.5rem;
+}
+
+.card-header h2 {
+  font-family: var(--font-family-title);
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: var(--color-primary);
+}
+
+.card-subtitle {
+  font-size: 0.85rem;
+  color: var(--color-text-muted);
+  margin-top: 0.25rem;
+}
+
+.deploy-form {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+.form-row-2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+}
+
+
+/* ── Active Deployments Grid ──────────────────────────────── */
+.apps-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 1.5rem;
+}
+
+/* App Card Styling */
+.app-card {
+  background-color: var(--color-bg-cream);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-bg-alt);
+  padding: 1.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+  box-shadow: var(--shadow-sm);
+  transition: transform var(--transition-normal), box-shadow var(--transition-normal), border-color var(--transition-normal);
+  position: relative;
+  overflow: hidden;
+}
+
+.app-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 4px;
+  background: linear-gradient(90deg, var(--color-primary), var(--color-accent));
+  opacity: 0.8;
+}
+
+.app-card:hover {
+  transform: translateY(-4px);
+  box-shadow: var(--shadow-md);
+  border-color: var(--color-primary-light);
+}
+
+.app-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+}
+
+.app-card-title-group {
+  display: flex;
+  flex-direction: column;
+}
+
+.app-card-title {
+  font-family: var(--font-family-title);
+  font-size: 1.2rem;
+  font-weight: 700;
+  color: var(--color-primary);
+  word-break: break-all;
+}
+
+.app-card-domain {
+  font-size: 0.8rem;
+  color: var(--color-text-muted);
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.app-card-domain a {
+  text-overflow: ellipsis;
+  overflow: hidden;
+  white-space: nowrap;
+  max-width: 180px;
+}
+
+/* App Stats Metrics */
+.app-stats {
+  background-color: var(--color-bg-base);
+  border-radius: var(--radius-sm);
+  padding: 0.75rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.stat-row {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+.stat-label-group {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.75rem;
+  font-weight: 500;
+}
+
+.stat-name {
+  color: var(--color-text-muted);
+}
+
+.stat-val {
+  font-weight: 600;
+  color: var(--color-text-main);
+}
+
+.stat-bar-track {
+  height: 6px;
+  background-color: var(--color-bg-alt);
+  border-radius: var(--radius-full);
+  overflow: hidden;
+  position: relative;
+}
+
+.stat-bar-fill {
+  height: 100%;
+  border-radius: var(--radius-full);
+  background-color: var(--color-accent);
+  width: 0%;
+  transition: width 0.5s ease;
+}
+
+.stat-bar-fill.warning {
+  background-color: var(--color-warning);
+}
+
+.stat-bar-fill.danger {
+  background-color: var(--color-danger);
+}
+
+.app-meta {
+  font-size: 0.75rem;
+  color: var(--color-text-muted);
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+/* App Card Actions */
+.app-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.5rem;
+  margin-top: auto;
+}
+
+.app-actions .btn {
+  padding: 0.5rem;
+  font-size: 0.8rem;
+}
+
+.btn-delete {
+  grid-column: span 2;
+}
+
+
+/* ── Detailed Deployment Specs View ───────────────────────── */
+.details-view {
+  background-color: var(--color-bg-surface);
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--color-bg-alt);
+  box-shadow: var(--shadow-md);
+  padding: 2rem;
+  display: flex;
+  flex-direction: column;
+  gap: 2rem;
+}
+
+.details-header {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+  border-bottom: 1px solid var(--color-bg-alt);
+  padding-bottom: 1.5rem;
+}
+
+#btn-back-dashboard {
+  align-self: flex-start;
+}
+
+.details-title-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 1rem;
+}
+
+.details-title-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.details-title-group h2 {
+  font-family: var(--font-family-title);
+  font-size: 2rem;
+  font-weight: 800;
+  color: var(--color-primary);
+  line-height: 1.1;
+}
+
+.details-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1.5rem;
+}
+
+@media (max-width: 992px) {
+  .details-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.details-subcard {
+  background-color: var(--color-bg-cream);
+  border: 1px solid var(--color-bg-alt);
+  border-radius: var(--radius-md);
+  padding: 1.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+  box-shadow: var(--shadow-sm);
+}
+
+.details-subcard h3 {
+  font-family: var(--font-family-title);
+  font-size: 1.15rem;
+  font-weight: 700;
+  color: var(--color-primary);
+  border-bottom: 1.5px solid var(--color-bg-alt);
+  padding-bottom: 0.5rem;
+}
+
+.config-panel {
+  display: flex;
+  flex-direction: column;
+}
+
+.config-info-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  font-size: 0.9rem;
+}
+
+.config-info-list div {
+  display: flex;
+  justify-content: space-between;
+  border-bottom: 1px dashed var(--color-bg-alt);
+  padding-bottom: 0.4rem;
+}
+
+.config-info-list div strong {
+  color: var(--color-text-muted);
+}
+
+.config-info-list div span {
+  font-weight: 600;
+  color: var(--color-text-main);
+  max-width: 250px;
+  word-break: break-all;
+}
+
+.details-env-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  max-height: 200px;
+  overflow-y: auto;
+  padding-right: 0.25rem;
+}
+
+.env-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background-color: var(--color-bg-base);
+  padding: 0.5rem 1rem;
+  border-radius: var(--radius-sm);
+  font-size: 0.85rem;
+  font-family: var(--font-family-mono);
+  border: 1px solid rgba(14, 90, 90, 0.05);
+}
+
+.env-item .env-key {
+  color: var(--color-primary-light);
+  font-weight: 600;
+}
+
+.env-item .env-val {
+  color: var(--color-text-main);
+  word-break: break-all;
+}
+
+.logs-panel {
+  grid-column: span 2;
+}
+
+@media (max-width: 992px) {
+  .logs-panel {
+    grid-column: span 1;
+  }
+}
+
+.logs-panel-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.details-actions-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 0.75rem;
+}

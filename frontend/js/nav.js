@@ -2,19 +2,21 @@
 (function () {
   const token = localStorage.getItem('mini_heroku_token');
   const profileCompleted = localStorage.getItem('mini_heroku_profile_completed');
-  const isLoginPage = window.location.pathname.endsWith('login.html');
+  const isAuthPage = window.location.pathname.includes('/auth/');
   
-  if (!isLoginPage) {
+  if (!isAuthPage) {
     if (!token) {
-      window.location.replace('login.html');
+      window.location.replace('/auth/login.html');
     } else if (!profileCompleted) {
-      window.location.replace('login.html');
+      window.location.replace('/auth/profile.html');
     }
-  } else if (token && profileCompleted && isLoginPage) {
-    // If logout action is passed, clear it instead of redirecting
-    const params = new URLSearchParams(window.location.search);
-    if (params.get('action') !== 'logout') {
-      window.location.replace('index.html');
+  } else {
+    // If we are on an auth page, redirect if already logged in and profile completed
+    if (token && profileCompleted) {
+      const params = new URLSearchParams(window.location.search);
+      if (params.get('action') !== 'logout') {
+        window.location.replace('/index.html');
+      }
     }
   }
 })();
@@ -24,7 +26,7 @@ function handleUnauthorized() {
   localStorage.removeItem('mini_heroku_token');
   localStorage.removeItem('mini_heroku_username');
   localStorage.removeItem('mini_heroku_profile_completed');
-  window.location.replace('login.html');
+  window.location.replace('/auth/login.html');
 }
 
 // Global authenticated fetch utility
@@ -62,10 +64,10 @@ document.addEventListener('DOMContentLoaded', () => {
   header.innerHTML = `
     <div class="header-container">
       <div class="logo-group">
-        <div class="logo-icon">▲</div>
+        <img src="assets/nobg-vessel-default-2.png" alt="Vessel Logo" style="height: 42px; width: auto; object-fit: contain; margin-right: 0.5rem;">
         <div class="logo-text">
-          <h1>Mini-Heroku</h1>
-          <span>Local PaaS Orchestrator</span>
+          <h1 style="font-family: var(--font-family-title); font-size: 1.35rem; font-weight: 800; color: var(--color-primary); margin: 0; line-height: 1.1;">Vessel</h1>
+          <span style="font-size: 0.75rem; color: var(--color-text-muted); text-transform: uppercase; letter-spacing: 0.05em; display: block; margin-top: 0.1rem;">Enterprise PaaS</span>
         </div>
       </div>
       
@@ -90,7 +92,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Bind logo click to home
   header.querySelector('.logo-group').addEventListener('click', () => {
-    window.location.href = 'index.html';
+    window.location.href = '/index.html';
   });
 
   // Bind logout action
@@ -100,7 +102,7 @@ document.addEventListener('DOMContentLoaded', () => {
       localStorage.removeItem('mini_heroku_token');
       localStorage.removeItem('mini_heroku_username');
       localStorage.removeItem('mini_heroku_profile_completed');
-      window.location.replace('login.html?action=logout');
+      window.location.replace('/auth/login.html?action=logout');
     });
   }
 });

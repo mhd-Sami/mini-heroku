@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Complete your Vessel profile details.">
+  <title>Vessel | Complete Profile</title>
+  <link rel="icon" type="image/x-icon" href="/assets/vessel.ico">
+  <!-- Google Fonts: Inter and Outfit -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <!-- Stylesheets -->
+  <link rel="stylesheet" href="../css/styles.css">
+
+  <!-- Supabase modular CDN importmap mapping -->
+  <script type="importmap">
+    {
+      "imports": {
+        "@supabase/supabase-js": "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm"
+      }
+    }
+  </script>
+  <!-- Auth Navigation Guard -->
+  <script src="../js/nav.js"></script>
+</head>
+
+<body class="auth-body-layout">
+  <!-- MindNest Background Decor -->
+  <div class="hero-orb" aria-hidden="true"></div>
+  <div class="zen-backdrop zen-backdrop-1" aria-hidden="true"></div>
+  <div class="zen-backdrop zen-backdrop-2" aria-hidden="true"></div>
+  <div class="ambient-particles" aria-hidden="true">
+    <span class="particle p1"></span>
+    <span class="particle p2"></span>
+    <span class="particle p3"></span>
+    <span class="particle p4"></span>
+    <span class="particle p5"></span>
+    <span class="particle p6"></span>
+  </div>
+
+  <div class="auth-container">
+    <!-- Left Column: Tech Promo Panel (PaaS Visuals) -->
+    <div class="auth-promo-panel">
+
+
+      <div class="promo-visuals">
+        <!-- Interactive Simulated Terminal -->
+        <div class="terminal-mockup">
+          <div class="terminal-header">
+            <span class="dot red"></span>
+            <span class="dot yellow"></span>
+            <span class="dot green"></span>
+            <span class="terminal-title">vessel-compiler --build</span>
+          </div>
+          <div class="terminal-body-mock">
+            <!-- Simulated logs generated dynamically via JS script -->
+          </div>
+        </div>
+
+        <!-- Telemetry Gauges Grid -->
+        <div class="stats-preview-grid">
+          <div class="stat-bubble">
+            <div class="bubble-title">System CPU Load</div>
+            <div class="bubble-value-row">
+              <span class="bubble-value">12.4%</span>
+              <span class="badge badge-success">Nominal</span>
+            </div>
+            <div class="sparkline">
+              <div class="sparkline-bar bar-1"></div>
+              <div class="sparkline-bar bar-2"></div>
+              <div class="sparkline-bar bar-3"></div>
+              <div class="sparkline-bar bar-4"></div>
+              <div class="sparkline-bar bar-5"></div>
+              <div class="sparkline-bar bar-6"></div>
+              <div class="sparkline-bar bar-7"></div>
+            </div>
+          </div>
+
+          <div class="stat-bubble">
+            <div class="bubble-title">Active Deployments</div>
+            <div class="bubble-value-row">
+              <span class="bubble-value">8 / 8</span>
+              <span class="badge badge-info">Healthy</span>
+            </div>
+            <div class="sparkline">
+              <div class="sparkline-bar bar-8"></div>
+              <div class="sparkline-bar bar-9"></div>
+              <div class="sparkline-bar bar-10"></div>
+              <div class="sparkline-bar bar-11"></div>
+              <div class="sparkline-bar bar-12"></div>
+              <div class="sparkline-bar bar-13"></div>
+              <div class="sparkline-bar bar-14"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="promo-footer">
+        <p>A high-performance local cloud platform for single-click microservices hosting, proxy routing, and Docker container virtualization.</p>
+      </div>
+    </div>
+
+    <!-- Right Column: Forms Panel -->
+    <div class="auth-form-panel">
+      <div class="auth-card animate-[authCardIn_0.4s_cubic-bezier(0.16,1,0.3,1)_forwards]">
+        <div class="auth-logo-group">
+          <img src="../assets/nobg-vessel-default-2.png" alt="Vessel Logo" class="auth-logo-img">
+        </div>
+
+        <!-- Profile Details Form -->
+        <form id="profile-form" class="auth-form">
+          <div class="auth-card-header" style="text-align: center; padding: 0;">
+            <h2 style="font-family: var(--font-family-title); font-size: 1.35rem; font-weight: 700; color: var(--color-text-main);">Complete Your Profile</h2>
+            <p style="font-size: 0.85rem; color: var(--color-text-muted); margin-top: 0.25rem;">Initialize your developer tenant workspace</p>
+          </div>
+          
+          <div class="form-group">
+            <label for="profile-name">Full Name</label>
+            <input type="text" id="profile-name" name="name" placeholder="e.g. John Doe" required autocomplete="name">
+          </div>
+          
+          <div class="form-group">
+            <label for="profile-use-case">Primary Use Case</label>
+            <input type="text" id="profile-use-case" name="use_case" placeholder="e.g. Personal Projects, API Hosting, Dev Sandbox" required>
+          </div>
+          
+          <div class="form-group">
+            <label for="profile-company">Company / Organization (Optional)</label>
+            <input type="text" id="profile-company" name="company" placeholder="e.g. ACME Corp" autocomplete="organization">
+          </div>
+          
+          <button type="submit" id="btn-save-profile" class="btn btn-primary btn-block">Save and Launch Dashboard</button>
+          <div id="profile-error" class="auth-message error-message hidden"></div>
+        </form>
+
+        <div class="auth-card-footer" style="text-align: center; margin-top: 0.5rem; font-size: 0.85rem; color: var(--color-text-muted);">
+          Want to use a different account? <a href="login.html?action=logout" class="utility-link" style="font-weight: 600; color: var(--color-primary); text-decoration: none;">Sign out</a>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script type="module" src="../js/login.js"></script>
+  <script>
+    document.addEventListener('DOMContentLoaded', () => {
+      const terminalBody = document.querySelector('.terminal-body-mock');
+      if (!terminalBody) return;
+
+      const lines = [
+        '<span class="t-cyan">$</span> git push vessel main',
+        '<span class="t-gray">Initializing build container deployment...</span>',
+        '<span class="t-green">[OK]</span> Found root Dockerfile in repository workspace',
+        '<span class="t-yellow">[INFO]</span> Building Docker image: registry.local/app-prod:v1.0',
+        '<span class="t-gray">[1/3] STEP 1: FROM node:20-alpine</span>',
+        '<span class="t-gray">[2/3] STEP 2: RUN npm ci --omit=dev</span>',
+        '<span class="t-green">[OK]</span> Dependencies compiled successfully in 3.4 seconds',
+        '<span class="t-gray">[3/3] STEP 3: CMD ["npm", "start"]</span>',
+        '<span class="t-green">[OK]</span> Container registry upload finished',
+        '<span class="t-purple">[ROUTE]</span> Generating proxy configurations...',
+        '<span class="t-blue" style="padding-left: 1.25rem;">Domain:</span> <span class="t-underline">http://my-node-app.localhost</span>',
+        '<span class="t-blue" style="padding-left: 1.25rem;">Reverse Proxy:</span> Port 3000 -> Traefik load-balancer',
+        '<span class="t-green">[OK]</span> Deploying container to Docker daemon...',
+        '<span class="t-bold t-indigo">[SUCCESS] Service launched! Application health: ACTIVE</span>'
+      ];
+
+      let lineIndex = 0;
+
+      function appendLine() {
+        if (lineIndex < lines.length) {
+          const lineDiv = document.createElement('div');
+          lineDiv.className = 'terminal-line';
+          lineDiv.innerHTML = lines[lineIndex];
+          lineDiv.style.opacity = '1';
+          lineDiv.style.transform = 'translateY(0)';
+          terminalBody.appendChild(lineDiv);
+          
+          // Auto-scroll to bottom of the terminal screen
+          terminalBody.scrollTop = terminalBody.scrollHeight;
+          
+          lineIndex++;
+          // Stagger delays for realistic typing feedback
+          let delay = 600;
+          if (lineIndex === 1) delay = 900;
+          if (lineIndex === 3) delay = 1200;
+          if (lineIndex === 6) delay = 1600;
+          if (lineIndex === 12) delay = 1000;
+          
+          setTimeout(appendLine, delay);
+        } else {
+          // Keep active logs visible for 8 seconds, then wipe and restart build compilation loop
+          setTimeout(() => {
+            terminalBody.innerHTML = '';
+            lineIndex = 0;
+            appendLine();
+          }, 8000);
+        }
+      }
+
+      // Initialize terminal view and launch loop
+      terminalBody.innerHTML = '';
+      appendLine();
+    });
+  </script>
+</body>
+</html>
