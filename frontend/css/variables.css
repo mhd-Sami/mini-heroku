@@ -1,25 +1,28 @@
 /* ==========================================================================
-   VESSEL DESIGN SYSTEM — VARIABLES & RESET
+   VESSEL DESIGN SYSTEM — VARIABLES & RESET (LIGHT NAVY THEME)
    ========================================================================== */
 
 /* Design Tokens & Variables */
 @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800;900&family=Inter:wght@300;400;500;600;700&family=Outfit:wght@400;500;600;700;800&display=swap');
 
 :root {
-  --color-primary: #25292b;       /* Graphite Black */
-  --color-primary-light: #3d4144; /* Medium Slate Graphite */
-  --color-primary-hover: #161819; /* Deep Charcoal Hover */
-  --color-accent: #0ea5e9;        /* Sky Blue */
-  --color-accent-soft: rgba(14, 165, 233, 0.1); /* Soft Sky Tint */
+  /* Colors - Modern White Theme with Deep Navy Accents */
+  --color-primary: #0f172a;       /* Deep Navy / Dark Slate (Slate-900) */
+  --color-primary-light: #1e293b; /* Slate-800 */
+  --color-primary-hover: #334155; /* Slate-700 */
+  --color-accent: #2563eb;        /* Vibrant Navy/Blue */
+  --color-accent-soft: rgba(37, 99, 235, 0.04); /* Soft Slate Grey Fills */
+  --color-accent-hover: #1d4ed8;
   
-  --color-bg-base: #f8fafc;       /* Light Slate Off-White */
-  --color-bg-surface: #ffffff;    /* Pure White for Cards */
-  --color-bg-alt: #e2e8f0;        /* Slate-200 for Borders/Dividers */
+  --color-bg-base: #f8fafc;       /* Clean Light Slate Off-White Base */
+  --color-bg-surface: #ffffff;    /* Pure White for Card Surfaces */
+  --color-bg-alt: #e2e8f0;        /* Light Slate-200 for Borders/Dividers */
   --color-bg-cream: #f1f5f9;      /* Slate-100 for Inputs/Fills */
+  --color-bg-glass-hover: rgba(15, 23, 42, 0.02);
   
-  --color-text-main: #0f172a;     /* Slate-900 */
-  --color-text-muted: #64748b;    /* Slate-500 */
-  --color-text-light: #ffffff;    /* White text */
+  --color-text-main: #0f172a;     /* Main Text (Slate-900) */
+  --color-text-muted: #64748b;    /* Muted Text (Slate-500) */
+  --color-text-light: #ffffff;    /* Light text inside dark buttons */
 
   --color-success: #10b981;       /* Emerald Success */
   --color-success-bg: #ecfdf5;
@@ -34,14 +37,22 @@
   --font-family-title: 'Outfit', sans-serif;
   --font-family-mono: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
 
-  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.03), 0 1px 1px rgba(0, 0, 0, 0.01);
-  --shadow-md: 0 4px 6px -1px rgba(37, 41, 43, 0.02), 0 2px 4px -1px rgba(0, 0, 0, 0.01);
-  --shadow-lg: 0 10px 15px -3px rgba(37, 41, 43, 0.03), 0 4px 6px -2px rgba(0, 0, 0, 0.01);
-  --shadow-premium: 0 25px 50px -12px rgba(37, 41, 43, 0.05), 0 8px 16px -8px rgba(0, 0, 0, 0.02);
+  /* Premium Gradients */
+  --grad-primary: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+  --grad-accent: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
+  --grad-success: linear-gradient(135deg, #10b981 0%, #059669 100%);
+  --grad-glass: linear-gradient(135deg, rgba(255, 255, 255, 0.8) 0%, rgba(255, 255, 255, 0.5) 100%);
 
-  --radius-sm: 8px;
-  --radius-md: 14px;
-  --radius-lg: 20px;
+  /* Modern Light Shadows */
+  --shadow-sm: 0 1px 2px rgba(15, 23, 42, 0.04);
+  --shadow-md: 0 4px 14px rgba(15, 23, 42, 0.04), 0 0 0 1px rgba(15, 23, 42, 0.01);
+  --shadow-lg: 0 12px 30px rgba(15, 23, 42, 0.06), 0 0 0 1px rgba(15, 23, 42, 0.02);
+  --shadow-premium: 0 20px 40px rgba(15, 23, 42, 0.08), 0 1px 3px rgba(15, 23, 42, 0.02), inset 0 1px 0 rgba(255, 255, 255, 0.8);
+
+  /* Modern Slightly More Rounded Shapes */
+  --radius-lg: 14px;
+  --radius-md: 10px;
+  --radius-sm: 6px;
   --radius-full: 9999px;
 
   --transition-fast: 0.15s ease;
@@ -59,6 +70,11 @@
 body {
   font-family: var(--font-family-sans);
   background-color: var(--color-bg-base);
+  background-image: 
+    radial-gradient(at 0% 0%, rgba(37, 99, 235, 0.03) 0px, transparent 50%),
+    radial-gradient(at 50% 0%, rgba(15, 23, 42, 0.02) 0px, transparent 50%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.5) 0%, rgba(248, 250, 252, 0.5) 100%);
+  background-attachment: fixed;
   color: var(--color-text-main);
   line-height: 1.6;
   -webkit-font-smoothing: antialiased;
@@ -70,10 +86,10 @@ body {
 a {
   color: var(--color-primary-light);
   text-decoration: none;
-  transition: color var(--transition-fast);
+  transition: all var(--transition-fast);
 }
 
 a:hover {
-  color: var(--color-primary-hover);
-  text-decoration: underline;
+  color: var(--color-primary);
+  text-decoration: none;
 }

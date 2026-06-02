@@ -254,11 +254,11 @@
 }
 
 .stat-bubble {
-  background-color: #0f172a; /* Graphite Dark matching terminal */
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  background-color: #ffffff;
+  border: 1px solid var(--color-bg-alt);
   border-radius: var(--radius-md);
   padding: 1.25rem;
-  box-shadow: 0 10px 25px rgba(15, 23, 42, 0.15);
+  box-shadow: 0 10px 25px rgba(15, 23, 42, 0.04);
   display: flex;
   flex-direction: column;
   gap: 0.5rem;
@@ -276,7 +276,7 @@
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.05em;
-  color: #94a3b8; /* Muted matching terminal title */
+  color: var(--color-text-muted);
 }
 
 .bubble-value-row {
@@ -289,7 +289,7 @@
   font-family: var(--font-family-title);
   font-size: 1.35rem;
   font-weight: 800;
-  color: #ffffff; /* White value text */
+  color: var(--color-text-main);
 }
 
 .badge {
@@ -346,13 +346,13 @@
 .sparkline-bar.bar-6 { animation: oscillate-reverse 1.5s ease-in-out infinite 0.5s; height: 80%; }
 .sparkline-bar.bar-7 { animation: oscillate 2.5s ease-in-out infinite; height: 45%; }
 
-.sparkline-bar.bar-8 { animation: oscillate-reverse 2.2s ease-in-out infinite 0.3s; height: 75%; background-color: var(--color-accent); }
-.sparkline-bar.bar-9 { animation: oscillate 1.8s ease-in-out infinite 0.1s; height: 40%; background-color: var(--color-accent); }
-.sparkline-bar.bar-10 { animation: oscillate-reverse 2.6s ease-in-out infinite 0.5s; height: 65%; background-color: var(--color-accent); }
-.sparkline-bar.bar-11 { animation: oscillate 1.4s ease-in-out infinite 0.2s; height: 80%; background-color: var(--color-accent); }
-.sparkline-bar.bar-12 { animation: oscillate-reverse 2s ease-in-out infinite 0.4s; height: 30%; background-color: var(--color-accent); }
-.sparkline-bar.bar-13 { animation: oscillate 2.3s ease-in-out infinite 0.1s; height: 55%; background-color: var(--color-accent); }
-.sparkline-bar.bar-14 { animation: oscillate-reverse 1.7s ease-in-out infinite 0.3s; height: 90%; background-color: var(--color-accent); }
+.sparkline-bar.bar-8 { animation: oscillate-reverse 2.2s ease-in-out infinite 0.3s; height: 75%; background-color: var(--color-primary); }
+.sparkline-bar.bar-9 { animation: oscillate 1.8s ease-in-out infinite 0.1s; height: 40%; background-color: var(--color-primary); }
+.sparkline-bar.bar-10 { animation: oscillate-reverse 2.6s ease-in-out infinite 0.5s; height: 65%; background-color: var(--color-primary); }
+.sparkline-bar.bar-11 { animation: oscillate 1.4s ease-in-out infinite 0.2s; height: 80%; background-color: var(--color-primary); }
+.sparkline-bar.bar-12 { animation: oscillate-reverse 2s ease-in-out infinite 0.4s; height: 30%; background-color: var(--color-primary); }
+.sparkline-bar.bar-13 { animation: oscillate 2.3s ease-in-out infinite 0.1s; height: 55%; background-color: var(--color-primary); }
+.sparkline-bar.bar-14 { animation: oscillate-reverse 1.7s ease-in-out infinite 0.3s; height: 90%; background-color: var(--color-primary); }
 
 .promo-footer {
   font-size: 0.8rem;
@@ -370,7 +370,7 @@
   align-items: center;
   justify-content: center;
   padding: 2rem;
-  background-color: #ffffff; /* Contrast pure white side */
+  background-color: #ffffff;
   position: relative;
   z-index: 2;
   height: 100vh;
@@ -392,7 +392,7 @@
   backdrop-filter: blur(24px);
   -webkit-backdrop-filter: blur(24px);
   border-radius: var(--radius-lg);
-  border: 1px solid rgba(255, 255, 255, 0.6);
+  border: 1px solid var(--color-bg-alt);
   box-shadow: var(--shadow-premium);
   padding: 3rem 2.5rem;
   width: 100%;

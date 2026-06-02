@@ -67,6 +67,34 @@ async function authFetch(url, options = {}) {
 
 
 // Dynamically render common header navbar on DOM load
+window.refreshNavBadge = function() {
+  const cached = localStorage.getItem('mini_heroku_deployments_cache');
+  let count = 0;
+  if (cached) {
+    try {
+      const arr = JSON.parse(cached);
+      if (Array.isArray(arr)) count = arr.length;
+    } catch (e) {}
+  }
+  const badgeEl = document.querySelector('.nav-badge');
+  if (badgeEl) {
+    if (count > 0) {
+      badgeEl.textContent = count;
+      badgeEl.style.display = 'inline-flex';
+    } else {
+      badgeEl.style.display = 'none';
+    }
+  } else if (count > 0) {
+    const deploymentsLink = document.querySelector('a[href="apps.html"]');
+    if (deploymentsLink) {
+      const span = document.createElement('span');
+      span.className = 'nav-badge';
+      span.textContent = count;
+      deploymentsLink.appendChild(span);
+    }
+  }
+};
+
 document.addEventListener('DOMContentLoaded', () => {
   const header = document.getElementById('app-header');
   if (!header) return;
@@ -79,30 +107,49 @@ document.addEventListener('DOMContentLoaded', () => {
   const deploymentsIcon = `<svg class="nav-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg>`;
   const accountIcon = `<svg class="nav-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>`;
 
+  // Resolve deployment count badge from localStorage cache
+  const cached = localStorage.getItem('mini_heroku_deployments_cache');
+  let deploymentsCount = 0;
+  if (cached) {
+    try {
+      const arr = JSON.parse(cached);
+      if (Array.isArray(arr)) deploymentsCount = arr.length;
+    } catch (e) {}
+  }
+  const countBadge = deploymentsCount > 0 ? `<span class="nav-badge">${deploymentsCount}</span>` : '';
+
   header.innerHTML = `
     <div class="header-container">
       <div class="logo-group">
-        <img src="assets/nobg-vessel-default-2.png" alt="Vessel Logo" style="height: 42px; width: auto; object-fit: contain; margin-right: 0.5rem;">
+        <img src="assets/nobg-vessel-default-2.png" alt="Vessel Logo" style="height: 38px; width: auto; object-fit: contain;">
         <div class="logo-text">
-          <h1 style="font-family: var(--font-family-title); font-size: 1.35rem; font-weight: 800; color: var(--color-primary); margin: 0; line-height: 1.1;">Vessel</h1>
-          <span style="font-size: 0.75rem; color: var(--color-text-muted); text-transform: uppercase; letter-spacing: 0.05em; display: block; margin-top: 0.1rem;">Enterprise PaaS</span>
+          <h1>Vessel</h1>
+          <span>Enterprise PaaS</span>
         </div>
       </div>
       
       <nav class="header-nav">
         <a href="index.html" class="nav-link ${currentPage === 'index.html' || currentPage === '' ? 'active' : ''}">${dashboardIcon}<span>Dashboard</span></a>
-        <a href="apps.html" class="nav-link ${currentPage === 'apps.html' || currentPage === 'app-details.html' ? 'active' : ''}">${deploymentsIcon}<span>Deployments</span></a>
+        <a href="apps.html" class="nav-link ${currentPage === 'apps.html' || currentPage === 'app-details.html' ? 'active' : ''}">${deploymentsIcon}<span>Deployments</span>${countBadge}</a>
         <a href="account.html" class="nav-link ${currentPage === 'account.html' ? 'active' : ''}">${accountIcon}<span>Account</span></a>
       </nav>
 
       <div class="header-right">
+        <!-- Shortcut New App call to action button -->
+        <a href="index.html" class="btn-nav-deploy" title="Deploy a new service">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          <span>New App</span>
+        </a>
         <div class="header-status">
           <span class="status-indicator online"></span>
           <span class="status-label">Daemon: Active</span>
         </div>
         <div class="user-profile" id="user-profile">
           <span id="header-username" class="username-display">${username}</span>
-          <button id="btn-logout" class="btn btn-secondary btn-sm">Log Out</button>
+          <button id="btn-logout" class="btn btn-logout-nav btn-sm">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="logout-icon"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+            <span>Log Out</span>
+          </button>
         </div>
       </div>
     </div>

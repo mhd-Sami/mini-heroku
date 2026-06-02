@@ -6,6 +6,7 @@ const WS_BASE = `${wsProtocol}//${window.location.host}`;
 let appName = '';
 let detailsSocket = null;
 let statsInterval = null;
+let lastStatus = ''; // Track last status to detect auto-deployment transitions
 
 // DOM Elements
 const detailsAppName = document.getElementById('details-app-name');
@@ -23,8 +24,10 @@ const detailsPort = document.getElementById('details-port');
 const detailsCpuLimit = document.getElementById('details-cpu-limit');
 const detailsMemLimit = document.getElementById('details-mem-limit');
 const detailsCreatedAt = document.getElementById('details-created-at');
+const detailsUpdatedAt = document.getElementById('details-updated-at');
 const detailsEnvList = document.getElementById('details-env-list');
 const detailsTerminal = document.getElementById('details-terminal');
+const detailsAutoDeploy = document.getElementById('details-auto-deploy');
 
 const btnDetailsCopyLogs = document.getElementById('btn-details-copy-logs');
 const btnDetailsStart = document.getElementById('btn-details-start');
@@ -65,6 +68,7 @@ async function loadDetails() {
 }
 
 function renderDetails(app) {
+  lastStatus = app.status;
   detailsAppName.textContent = app.app_name;
   detailsAppLink.href = app.local_domain;
   detailsAppLink.textContent = `${app.app_name}.localhost`;
@@ -77,6 +81,29 @@ function renderDetails(app) {
   detailsCpuLimit.textContent = app.cpu_limit ? `${app.cpu_limit} Cores` : 'None';
   detailsMemLimit.textContent = app.memory_limit || 'None';
   detailsCreatedAt.textContent = new Date(app.created_at).toLocaleString();
+  if (detailsUpdatedAt) {
+    detailsUpdatedAt.textContent = new Date(app.updated_at || app.created_at).toLocaleString();
+  }
+
+  if (detailsAutoDeploy) {
+    detailsAutoDeploy.checked = app.auto_deploy || false;
+    detailsAutoDeploy.onchange = async () => {
+      const enabled = detailsAutoDeploy.checked;
+      try {
+        const res = await authFetch(`${API_BASE}/api/apps/${appName}/auto-deploy`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ enabled })
+        });
+        if (!res.ok) throw new Error("Failed to update auto-deployment setting");
+        const result = await res.json();
+        console.log("Auto-deploy setting updated to:", result.auto_deploy);
+      } catch (err) {
+        alert(err.message);
+        detailsAutoDeploy.checked = !enabled; // Revert checkbox
+      }
+    };
+  }
 
   // Render environment variables
   detailsEnvList.innerHTML = '';
@@ -87,10 +114,31 @@ function renderDetails(app) {
     envKeys.forEach(key => {
       const item = document.createElement('div');
       item.className = 'env-item';
+      item.style.cssText = 'display: flex; justify-content: space-between; align-items: center; background-color: var(--color-bg-cream); padding: 0.5rem 0.75rem; border-radius: var(--radius-sm); font-size: 0.8rem; font-family: var(--font-family-mono); border: 1px solid var(--color-bg-alt); margin-bottom: 0.5rem;';
+      
+      const rawValue = app.env_vars[key];
+      const maskedValue = '••••••••';
+      
       item.innerHTML = `
-        <span class="env-key">${key}</span>
-        <span class="env-val">${app.env_vars[key]}</span>
+        <span class="env-key" style="color: var(--color-primary-light); font-weight: 600;">${key}</span>
+        <div style="display: flex; align-items: center; gap: 0.5rem;">
+          <span class="env-val" id="env-val-${key}" style="color: var(--color-text-main); font-weight: 600;">${maskedValue}</span>
+          <button type="button" class="btn-toggle-env" style="background: none; border: none; cursor: pointer; color: var(--color-text-muted); padding: 0 0.2rem; display: flex; align-items: center;" title="Show/Hide Value">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="eye-icon"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+          </button>
+        </div>
       `;
+      
+      const toggleBtn = item.querySelector('.btn-toggle-env');
+      const valSpan = item.querySelector('.env-val');
+      toggleBtn.onclick = () => {
+        const isMasked = valSpan.textContent === maskedValue;
+        valSpan.textContent = isMasked ? rawValue : maskedValue;
+        toggleBtn.innerHTML = isMasked 
+          ? `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="eye-icon"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>`
+          : `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="eye-icon"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>`;
+      };
+      
       detailsEnvList.appendChild(item);
     });
   }
@@ -196,6 +244,27 @@ function startStatsPolling() {
   if (statsInterval) {
     clearInterval(statsInterval);
   }
+  // Try loading cached stats for this app first
+  try {
+    const cached = localStorage.getItem('mini_heroku_stats_cache');
+    if (cached) {
+      const stats = JSON.parse(cached)[appName];
+      if (stats && stats.status === 'running') {
+        if (detailsCpuVal) detailsCpuVal.textContent = `${stats.cpu_percent}%`;
+        if (detailsCpuBar) {
+          detailsCpuBar.style.width = `${Math.min(stats.cpu_percent, 100)}%`;
+          setBarColor(detailsCpuBar, stats.cpu_percent);
+        }
+        if (detailsMemVal) detailsMemVal.textContent = `${stats.memory_usage_mb}MB / ${stats.memory_limit_mb}MB`;
+        if (detailsMemBar) {
+          detailsMemBar.style.width = `${stats.memory_percent}%`;
+          setBarColor(detailsMemBar, stats.memory_percent);
+        }
+      }
+    }
+  } catch (e) {
+    console.error("Error reading cached stats in details:", e);
+  }
   pollStats();
   statsInterval = setInterval(pollStats, 3000);
 }
@@ -205,6 +274,37 @@ async function pollStats() {
     const res = await authFetch(`${API_BASE}/api/apps/${appName}/stats`);
     if (!res.ok) return;
     const data = await res.json();
+
+    // Check for auto-deploy transitions
+    if (lastStatus && lastStatus !== 'building' && data.status === 'building' && data.auto_deploy) {
+      showToastNotification(`New changes pushed for '${appName}'. New deployment in progress...`);
+    }
+    lastStatus = data.status;
+
+    // Render alert banner if building
+    const detailsAlertBanner = document.getElementById('details-alert-banner');
+    if (data.status === 'building') {
+      if (detailsAlertBanner) {
+        detailsAlertBanner.innerHTML = `
+          <div class="card-alert-banner" style="margin-top: 1rem; display: flex; align-items: center; gap: 0.4rem; padding: 0.8rem; border-radius: var(--radius-md); border: 1px solid rgba(37, 99, 235, 0.15); background-color: rgba(37, 99, 235, 0.05); color: var(--color-info); font-size: 0.88rem; font-weight: 600;">
+            <span class="btn-spinner" style="border-top-color: currentColor; width: 14px; height: 14px; border-width: 1.5px; margin: 0;"></span>
+            <span>New changes pushed. New deployment in progress...</span>
+          </div>
+        `;
+      }
+    } else {
+      if (detailsAlertBanner) {
+        detailsAlertBanner.innerHTML = '';
+      }
+    }
+
+    // Render latest deployment time
+    if (data.updated_at) {
+      const detailsUpdatedAt = document.getElementById('details-updated-at');
+      if (detailsUpdatedAt) {
+        detailsUpdatedAt.textContent = new Date(data.updated_at).toLocaleString();
+      }
+    }
 
     if (data.status === 'running') {
       detailsCpuVal.textContent = `${data.cpu_percent}%`;
@@ -220,6 +320,20 @@ async function pollStats() {
       btnDetailsStart.disabled = true;
       btnDetailsStop.disabled = false;
       btnDetailsRestart.disabled = false;
+
+      // Update the cache as well!
+      try {
+        const cached = localStorage.getItem('mini_heroku_stats_cache');
+        const cacheObj = cached ? JSON.parse(cached) : {};
+        cacheObj[appName] = {
+          status: "running",
+          cpu_percent: data.cpu_percent,
+          memory_usage_mb: data.memory_usage_mb,
+          memory_limit_mb: data.memory_limit_mb,
+          memory_percent: data.memory_percent
+        };
+        localStorage.setItem('mini_heroku_stats_cache', JSON.stringify(cacheObj));
+      } catch (e) {}
     } else {
       detailsCpuVal.textContent = '0%';
       detailsCpuBar.style.width = '0%';
@@ -231,6 +345,16 @@ async function pollStats() {
       btnDetailsStart.disabled = data.status === 'building';
       btnDetailsStop.disabled = true;
       btnDetailsRestart.disabled = true;
+
+      // Remove from cache or set as stopped
+      try {
+        const cached = localStorage.getItem('mini_heroku_stats_cache');
+        if (cached) {
+          const cacheObj = JSON.parse(cached);
+          delete cacheObj[appName];
+          localStorage.setItem('mini_heroku_stats_cache', JSON.stringify(cacheObj));
+        }
+      } catch (e) {}
     }
   } catch (err) {
     console.error('Stats error:', err);
@@ -265,3 +389,27 @@ btnDetailsCopyLogs.onclick = () => {
 
 // Parse parameters on load
 parseQuery();
+
+function showToastNotification(message) {
+  let container = document.getElementById('toast-container');
+  if (!container) {
+    container = document.createElement('div');
+    container.id = 'toast-container';
+    container.style.cssText = 'position: fixed; bottom: 2rem; right: 2rem; display: flex; flex-direction: column; gap: 0.75rem; z-index: 9999; pointer-events: none;';
+    document.body.appendChild(container);
+  }
+  const toast = document.createElement('div');
+  toast.className = 'toast-alert';
+  toast.style.cssText = 'background: var(--color-primary); color: var(--color-text-light); border: 1px solid var(--color-bg-alt); padding: 0.8rem 1.2rem; border-radius: var(--radius-sm); box-shadow: var(--shadow-lg); font-size: 0.85rem; font-weight: 600; min-width: 300px; backdrop-filter: blur(8px); animation: toastIn 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards; pointer-events: auto;';
+  toast.innerHTML = `
+    <div style="display: flex; align-items: center; gap: 0.6rem;">
+      <span class="btn-spinner" style="border-top-color: var(--color-text-light); width: 12px; height: 12px; border-width: 1.5px; margin: 0;"></span>
+      <span>${message}</span>
+    </div>
+  `;
+  container.appendChild(toast);
+  setTimeout(() => {
+    toast.style.animation = 'toastOut 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards';
+    setTimeout(() => toast.remove(), 300);
+  }, 6000);
+}

@@ -24,30 +24,111 @@
     <div class="workspace-grid" style="grid-template-columns: 1fr;">
       <!-- Active App Grid Panel -->
       <section class="workspace-card grid-section" aria-labelledby="grid-heading">
-        <div class="card-header">
+        <div class="card-header" style="margin-bottom: 1rem;">
           <h2 id="grid-heading">Active Deployments</h2>
           <p class="card-subtitle">Manage and monitor running containers</p>
         </div>
 
-        <!-- Loading state placeholder -->
-        <div id="loading-state" class="empty-state">
-          <div class="loading-spinner"></div>
-          <h3>Loading deployments...</h3>
-          <p>Connecting to Vessel daemon and fetching active containers</p>
+        <!-- Tab navigation selector -->
+        <div class="tabs-nav">
+          <button type="button" class="tab-btn active" id="tab-active">Active Deployments</button>
+          <button type="button" class="tab-btn" id="tab-history">Deployment History</button>
         </div>
 
-        <!-- Empty state placeholder -->
-        <div id="empty-state" class="empty-state hidden">
-          <div class="empty-icon-svg">
-            <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+        <!-- Active Deployments View Wrapper -->
+        <div id="active-deployments-view">
+          <!-- System Telemetry Bar -->
+          <div class="telemetry-summary" style="margin-bottom: 1.5rem;">
+            <div class="telemetry-group">
+              <div class="telemetry-item">
+                <span class="telemetry-label">Total Services</span>
+                <span class="telemetry-value" id="telemetry-total-apps">--</span>
+              </div>
+              <div class="telemetry-item">
+                <span class="telemetry-label">Running Status</span>
+                <span class="telemetry-value" id="telemetry-running-apps">--</span>
+              </div>
+              <div class="telemetry-item">
+                <span class="telemetry-label">Total CPU Load</span>
+                <span class="telemetry-value" id="telemetry-total-cpu">0%</span>
+              </div>
+              <div class="telemetry-item">
+                <span class="telemetry-label">Memory Footprint</span>
+                <span class="telemetry-value" id="telemetry-total-mem">0 MB</span>
+              </div>
+            </div>
           </div>
-          <h3>No applications deployed</h3>
-          <p>Go to the Dashboard page to launch your first service.</p>
-          <a href="index.html" class="btn btn-primary" style="margin-top: 1rem; display: inline-flex;">Go to Dashboard</a>
+
+          <!-- Search and Filter Panel -->
+          <div class="search-filter-panel" style="margin-bottom: 1.5rem;">
+            <div class="search-wrapper">
+              <svg class="search-icon-svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+              <input type="text" id="search-input" class="search-input" placeholder="Search by app name...">
+            </div>
+            <div class="filter-group" id="filter-group">
+              <button type="button" class="filter-btn active" data-status="all">All</button>
+              <button type="button" class="filter-btn" data-status="running">Running</button>
+              <button type="button" class="filter-btn" data-status="building">Building</button>
+              <button type="button" class="filter-btn" data-status="stopped">Stopped</button>
+              <button type="button" class="filter-btn" data-status="failed">Failed</button>
+            </div>
+          </div>
+
+          <!-- Loading state placeholder -->
+          <div id="loading-state" class="empty-state">
+            <div class="loading-spinner"></div>
+            <h3>Loading deployments...</h3>
+            <p>Connecting to Vessel daemon and fetching active containers</p>
+          </div>
+
+          <!-- Empty state placeholder -->
+          <div id="empty-state" class="empty-state hidden">
+            <div class="empty-icon-svg">
+              <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+            </div>
+            <h3>No applications deployed</h3>
+            <p>Go to the Dashboard page to launch your first service.</p>
+            <a href="index.html" class="btn btn-primary" style="margin-top: 1rem; display: inline-flex;">Go to Dashboard</a>
+          </div>
+
+          <div id="apps-grid" class="apps-grid hidden">
+            <!-- Dynamically populated app cards -->
+          </div>
         </div>
 
-        <div id="apps-grid" class="apps-grid hidden">
-          <!-- Dynamically populated app cards -->
+        <!-- Deployment History View Wrapper -->
+        <div id="history-view" class="hidden">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
+            <p class="card-subtitle" style="margin-bottom: 0;">Audit log of all past deployment compilation results</p>
+            <button type="button" id="btn-clear-history" class="btn btn-secondary btn-sm" style="color: var(--color-danger); border-color: rgba(239, 68, 68, 0.15); background-color: var(--color-danger-bg); font-weight: 600; cursor: pointer; transition: all var(--transition-fast);">Clear History</button>
+          </div>
+
+          <div class="history-table-wrapper" id="history-table-wrapper">
+            <table class="history-table">
+              <thead>
+                <tr>
+                  <th>App Name</th>
+                  <th>Git Repository</th>
+                  <th>Status</th>
+                  <th>Commit Hash</th>
+                  <th>Deployed At</th>
+                  <th style="text-align: right; padding-right: 1.5rem;">Actions</th>
+                </tr>
+              </thead>
+              <tbody id="history-table-body">
+                <!-- Dynamically populated logs -->
+              </tbody>
+            </table>
+          </div>
+
+          <!-- Empty History state placeholder -->
+          <div id="history-empty-state" class="empty-state hidden" style="border: none; background: transparent; padding: 4rem 2rem;">
+            <div class="empty-icon-svg">
+              <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 8v4l3 3m6-3a9 9 0 1 1-18 0 9 9 0 0 1 18 0z"/></svg>
+            </div>
+            <h3>No deployment history</h3>
+            <p>You haven't made any deployments yet, or history saving is disabled.</p>
+          </div>
         </div>
       </section>
     </div>

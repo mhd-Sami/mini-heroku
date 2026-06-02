@@ -84,10 +84,37 @@ async function loadProfileInfo() {
           profileUsernameDisplay.textContent = data.username;
         }
       }
+      if (data.save_history !== undefined) {
+        const checkbox = document.getElementById('profile-save-history');
+        if (checkbox) {
+          checkbox.checked = data.save_history;
+        }
+      }
     }
   } catch (err) {
     console.error('Failed to load profile details:', err);
   }
+}
+
+// Bind history saving preference change
+const historyCheckbox = document.getElementById('profile-save-history');
+if (historyCheckbox) {
+  historyCheckbox.addEventListener('change', async () => {
+    try {
+      const res = await authFetch(`${API_BASE}/api/auth/profile/history-settings`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ save_history: historyCheckbox.checked })
+      });
+      if (!res.ok) {
+        throw new Error('Failed to update history preferences');
+      }
+    } catch (err) {
+      console.error(err);
+      alert('Error updating history preferences: ' + err.message);
+      historyCheckbox.checked = !historyCheckbox.checked;
+    }
+  });
 }
 
 // Bind password change form

@@ -1,4 +1,5 @@
 import os
+from datetime import datetime
 import re
 import json
 import shutil
@@ -13,7 +14,7 @@ from sqlalchemy.orm import Session
 import docker
 import docker.errors
 
-from database import init_db, get_db, Deployment, SessionLocal, User, UserProfile
+from database import init_db, get_db, Deployment, SessionLocal, User, UserProfile, DeploymentHistory
 from auth import get_current_user, hash_password, verify_password, create_access_token, SECRET_KEY, ALGORITHM, AUTH_MODE, security
 import jwt
 from auth_routes import router as auth_router
@@ -105,6 +106,23 @@ def log_message(app_name: str, message: str):
         build_logs[app_name].append(clean_msg)
         print(f"[{app_name}] {clean_msg}", flush=True)
         broadcaster.broadcast(app_name, clean_msg)
+
+def get_remote_commit_hash(git_url: str) -> Optional[str]:
+    try:
+        result = subprocess.run(
+            ["git", "ls-remote", git_url, "HEAD"],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            timeout=15
+        )
+        if result.returncode == 0 and result.stdout:
+            parts = result.stdout.split()
+            if parts:
+                return parts[0]
+    except Exception as e:
+        print(f"Error fetching remote commit hash: {e}", flush=True)
+    return None
 
 def deploy_app_task(
     db_id: int, 
@@ -228,12 +246,65 @@ def deploy_app_task(
 
         deployment.status = "running"
         deployment.container_id = container.id
+        deployment.updated_at = datetime.utcnow()
+
+        # Get commit hash of what was built
+        try:
+            hash_result = subprocess.run(
+                ["git", "rev-parse", "HEAD"],
+                cwd=clone_dir,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+                timeout=10
+            )
+            if hash_result.returncode == 0 and hash_result.stdout:
+                deployment.last_commit_hash = hash_result.stdout.strip()
+                log_message(app_name, f"Cached last deployed commit hash: {deployment.last_commit_hash}")
+        except Exception as hash_err:
+            log_message(app_name, f"Warning: Could not fetch build commit hash: {hash_err}")
+
         db.commit()
+
+        # Save history if enabled
+        if deployment.user_id:
+            try:
+                profile = db.query(UserProfile).filter(UserProfile.id == deployment.user_id).first()
+                if not profile or getattr(profile, "save_history", True):
+                    history_entry = DeploymentHistory(
+                        user_id=deployment.user_id,
+                        app_name=app_name,
+                        git_url=git_url,
+                        status="success",
+                        last_commit_hash=deployment.last_commit_hash
+                    )
+                    db.add(history_entry)
+                    db.commit()
+            except Exception as hist_err:
+                print(f"Error logging success deployment history: {hist_err}", flush=True)
 
     except Exception as e:
         log_message(app_name, f"Deployment ERROR: {str(e)}")
         deployment.status = "failed"
+        deployment.updated_at = datetime.utcnow()
         db.commit()
+
+        # Save history if enabled
+        if deployment.user_id:
+            try:
+                profile = db.query(UserProfile).filter(UserProfile.id == deployment.user_id).first()
+                if not profile or getattr(profile, "save_history", True):
+                    history_entry = DeploymentHistory(
+                        user_id=deployment.user_id,
+                        app_name=app_name,
+                        git_url=git_url,
+                        status="failed",
+                        last_commit_hash=deployment.last_commit_hash
+                    )
+                    db.add(history_entry)
+                    db.commit()
+            except Exception as hist_err:
+                print(f"Error logging failed deployment history: {hist_err}", flush=True)
     finally:
         # Clean up temporary Git clone directory
         if os.path.exists(clone_dir):
@@ -246,6 +317,17 @@ def deploy_app_task(
 # Pydantic schemas
 from pydantic import BaseModel
 
+class DeploymentHistoryResponse(BaseModel):
+    id: int
+    app_name: str
+    git_url: str
+    status: str
+    last_commit_hash: Optional[str] = None
+    deployed_at: datetime
+
+    class Config:
+        orm_mode = True
+
 class DeployRequest(BaseModel):
     app_name: str
     git_url: str
@@ -253,6 +335,7 @@ class DeployRequest(BaseModel):
     cpu_limit: Optional[float] = None
     memory_limit: Optional[str] = None
     env_vars: Optional[Dict[str, str]] = None
+    auto_deploy: Optional[bool] = False
 
 @app.on_event("startup")
 def startup_event():
@@ -268,6 +351,129 @@ def startup_event():
             print("Created Docker network 'mini-heroku-net'")
     except Exception as e:
         print(f"Warning: could not initialize Docker network: {e}")
+
+    # Start auto-deploy background poller loop
+    asyncio.create_task(auto_deploy_poller())
+    # Start live telemetry stats cacher background task
+    asyncio.create_task(stats_cacher_loop())
+
+_app_stats_cache = {}
+
+def fetch_and_cache_single_app_stats(app_name: str, user_id: str):
+    global _app_stats_cache
+    try:
+        client = get_docker_client()
+        container = client.containers.get(app_name)
+        stats = container.stats(stream=False)
+        
+        # Calculate CPU usage
+        cpu_stats = stats.get('cpu_stats', {})
+        precpu_stats = stats.get('precpu_stats', {})
+        
+        cpu_percent = 0.0
+        cpu_usage = cpu_stats.get('cpu_usage', {}).get('total_usage', 0)
+        precpu_usage = precpu_stats.get('cpu_usage', {}).get('total_usage', 0)
+        
+        system_cpu = cpu_stats.get('system_cpu_usage', 0)
+        presystem_cpu = precpu_stats.get('system_cpu_usage', 0)
+        
+        cpu_delta = cpu_usage - precpu_usage
+        system_delta = system_cpu - presystem_cpu
+        
+        online_cpus = cpu_stats.get('online_cpus', 1)
+        
+        if system_delta > 0 and cpu_delta > 0:
+            cpu_percent = (cpu_delta / system_delta) * online_cpus * 100.0
+            
+        # Calculate Memory Usage
+        memory_stats = stats.get('memory_stats', {})
+        mem_usage = memory_stats.get('usage', 0)
+        mem_limit = memory_stats.get('limit', 1)
+        
+        mem_usage_mb = round(mem_usage / (1024 * 1024), 2)
+        mem_limit_mb = round(mem_limit / (1024 * 1024), 2)
+        mem_percent = round((mem_usage / mem_limit) * 100.0, 2)
+        cpu_percent = round(cpu_percent, 2)
+        
+        _app_stats_cache[app_name] = {
+            "status": "running",
+            "cpu_percent": cpu_percent,
+            "memory_usage_mb": mem_usage_mb,
+            "memory_limit_mb": mem_limit_mb,
+            "memory_percent": mem_percent,
+            "user_id": user_id
+        }
+    except docker.errors.NotFound:
+        # Sync DB state
+        try:
+            db = SessionLocal()
+            deployment = db.query(Deployment).filter(Deployment.app_name == app_name).first()
+            if deployment:
+                deployment.status = "stopped"
+                db.commit()
+            db.close()
+        except Exception:
+            pass
+        _app_stats_cache.pop(app_name, None)
+    except Exception:
+        pass
+
+async def stats_cacher_loop():
+    print("Vessel stats cacher loop background task started.", flush=True)
+    while True:
+        try:
+            db = SessionLocal()
+            running_deployments = db.query(Deployment).filter(Deployment.status == "running").all()
+            db.close()
+            
+            if running_deployments:
+                tasks = []
+                for d in running_deployments:
+                    tasks.append(asyncio.to_thread(fetch_and_cache_single_app_stats, d.app_name, d.user_id))
+                await asyncio.gather(*tasks, return_exceptions=True)
+        except Exception as e:
+            print(f"[STATS-CACHER] Error in cacher loop: {e}", flush=True)
+        
+        await asyncio.sleep(3)
+
+async def auto_deploy_poller():
+    print("Auto-deployment background poller task started.", flush=True)
+    while True:
+        await asyncio.sleep(60) # Poll every 60 seconds
+        db = SessionLocal()
+        try:
+            apps = db.query(Deployment).filter(
+                Deployment.auto_deploy == True,
+                Deployment.status == "running"
+            ).all()
+            
+            for app in apps:
+                latest_hash = get_remote_commit_hash(app.git_url)
+                if not latest_hash:
+                    continue
+                
+                if app.last_commit_hash != latest_hash:
+                    print(f"[AUTO-DEPLOY] New changes detected for app '{app.app_name}'. Local: {app.last_commit_hash}, Remote: {latest_hash}. Triggering rebuild...", flush=True)
+                    app.status = "building"
+                    app.last_commit_hash = latest_hash
+                    db.commit()
+                    
+                    loop = asyncio.get_event_loop()
+                    loop.run_in_executor(
+                        None,
+                        deploy_app_task,
+                        app.id,
+                        app.app_name,
+                        app.git_url,
+                        app.port,
+                        app.cpu_limit,
+                        app.memory_limit,
+                        json.loads(app.env_vars) if app.env_vars else {}
+                    )
+        except Exception as e:
+            print(f"[AUTO-DEPLOY] Error in poller loop: {e}", flush=True)
+        finally:
+            db.close()
 
 
 
@@ -344,6 +550,9 @@ def list_apps(db: Session = Depends(get_db), current_uid: str = Depends(get_curr
             "cpu_limit": d.cpu_limit,
             "memory_limit": d.memory_limit,
             "env_vars": json.loads(d.env_vars) if d.env_vars else {},
+            "auto_deploy": d.auto_deploy,
+            "last_commit_hash": d.last_commit_hash,
+            "updated_at": d.updated_at.isoformat() if d.updated_at else d.created_at.isoformat(),
             "created_at": d.created_at.isoformat()
         })
     return result
@@ -381,6 +590,8 @@ def deploy_app(
         existing.env_vars = json.dumps(request.env_vars) if request.env_vars else "{}"
         existing.status = "building"
         existing.user_id = current_uid  # Claim ownership if it was None
+        if request.auto_deploy is not None:
+            existing.auto_deploy = request.auto_deploy
         db.commit()
         db_id = existing.id
     else:
@@ -394,7 +605,8 @@ def deploy_app(
             cpu_limit=request.cpu_limit,
             memory_limit=request.memory_limit,
             env_vars=json.dumps(request.env_vars) if request.env_vars else "{}",
-            user_id=current_uid
+            user_id=current_uid,
+            auto_deploy=request.auto_deploy or False
         )
         db.add(deployment)
         db.commit()
@@ -538,6 +750,49 @@ def delete_app(app_name: str, db: Session = Depends(get_db), current_uid: str = 
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+class AutoDeployToggleRequest(BaseModel):
+    enabled: bool
+
+@app.post("/api/apps/{app_name}/auto-deploy")
+def toggle_auto_deploy(
+    app_name: str, 
+    request: AutoDeployToggleRequest, 
+    db: Session = Depends(get_db), 
+    current_uid: str = Depends(get_current_user)
+):
+    deployment = db.query(Deployment).filter(Deployment.app_name == app_name).first()
+    if not deployment:
+        raise HTTPException(status_code=404, detail="App not found")
+    
+    if deployment.user_id is not None and str(deployment.user_id) != str(current_uid):
+        raise HTTPException(status_code=403, detail="Permission denied")
+        
+    deployment.auto_deploy = request.enabled
+    
+    # If enabling auto-deploy, query the remote HEAD hash immediately and cache it
+    # so that we don't trigger a redeployment on the very next poll cycle
+    if request.enabled and not deployment.last_commit_hash:
+        commit_hash = get_remote_commit_hash(deployment.git_url)
+        if commit_hash:
+            deployment.last_commit_hash = commit_hash
+            
+    db.commit()
+    return {"status": "success", "auto_deploy": deployment.auto_deploy}
+
+@app.get("/api/apps/stats/bulk")
+def get_bulk_app_stats(current_uid: str = Depends(get_current_user)):
+    user_stats = {}
+    for app_name, stats in _app_stats_cache.items():
+        if str(stats.get("user_id")) == str(current_uid):
+            user_stats[app_name] = {
+                "status": stats.get("status"),
+                "cpu_percent": stats.get("cpu_percent"),
+                "memory_usage_mb": stats.get("memory_usage_mb"),
+                "memory_limit_mb": stats.get("memory_limit_mb"),
+                "memory_percent": stats.get("memory_percent")
+            }
+    return user_stats
+
 @app.get("/api/apps/{app_name}/stats")
 def get_app_stats(app_name: str, db: Session = Depends(get_db), current_uid: str = Depends(get_current_user)):
     deployment = db.query(Deployment).filter(Deployment.app_name == app_name).first()
@@ -550,80 +805,147 @@ def get_app_stats(app_name: str, db: Session = Depends(get_db), current_uid: str
     if deployment.user_id is None:
         deployment.user_id = current_uid
         db.commit()
-    
-    if deployment.status != "running":
-        return {
-            "status": deployment.status, 
-            "cpu_percent": 0.0, 
-            "memory_usage_mb": 0.0, 
-            "memory_limit_mb": 0.0, 
-            "memory_percent": 0.0
-        }
 
-    try:
-        client = get_docker_client()
-        container = client.containers.get(app_name)
-        
-        # Non-streaming statistics query
-        stats = container.stats(stream=False)
-        
-        # Calculate CPU usage
-        cpu_stats = stats.get('cpu_stats', {})
-        precpu_stats = stats.get('precpu_stats', {})
-        
-        cpu_percent = 0.0
-        cpu_usage = cpu_stats.get('cpu_usage', {}).get('total_usage', 0)
-        precpu_usage = precpu_stats.get('cpu_usage', {}).get('total_usage', 0)
-        
-        system_cpu = cpu_stats.get('system_cpu_usage', 0)
-        presystem_cpu = precpu_stats.get('system_cpu_usage', 0)
-        
-        cpu_delta = cpu_usage - precpu_usage
-        system_delta = system_cpu - presystem_cpu
-        
-        online_cpus = cpu_stats.get('online_cpus', 1)
-        
-        if system_delta > 0 and cpu_delta > 0:
-            # Formula matching docker stats CLI
-            cpu_percent = (cpu_delta / system_delta) * online_cpus * 100.0
-            
-        # Calculate Memory Usage
-        memory_stats = stats.get('memory_stats', {})
-        mem_usage = memory_stats.get('usage', 0)
-        mem_limit = memory_stats.get('limit', 1)
-        
-        mem_usage_mb = round(mem_usage / (1024 * 1024), 2)
-        mem_limit_mb = round(mem_limit / (1024 * 1024), 2)
-        mem_percent = round((mem_usage / mem_limit) * 100.0, 2)
-        cpu_percent = round(cpu_percent, 2)
-        
-        return {
-            "status": "running",
-            "cpu_percent": cpu_percent,
-            "memory_usage_mb": mem_usage_mb,
-            "memory_limit_mb": mem_limit_mb,
-            "memory_percent": mem_percent
+    # Check memory cache first
+    cached = _app_stats_cache.get(app_name)
+    if cached:
+        res = {
+            "status": cached.get("status"),
+            "cpu_percent": cached.get("cpu_percent"),
+            "memory_usage_mb": cached.get("memory_usage_mb"),
+            "memory_limit_mb": cached.get("memory_limit_mb"),
+            "memory_percent": cached.get("memory_percent")
         }
-    except docker.errors.NotFound:
-        # Sync DB state
-        deployment.status = "stopped"
-        db.commit()
+    else:
+        # Fallback / Default
+        res = {}
+        if deployment.status != "running":
+            res = {
+                "status": deployment.status, 
+                "cpu_percent": 0.0, 
+                "memory_usage_mb": 0.0, 
+                "memory_limit_mb": 0.0, 
+                "memory_percent": 0.0
+            }
+        else:
+            try:
+                client = get_docker_client()
+                container = client.containers.get(app_name)
+                stats = container.stats(stream=False)
+                
+                # Calculate CPU usage
+                cpu_stats = stats.get('cpu_stats', {})
+                precpu_stats = stats.get('precpu_stats', {})
+                cpu_percent = 0.0
+                cpu_usage = cpu_stats.get('cpu_usage', {}).get('total_usage', 0)
+                precpu_usage = precpu_stats.get('cpu_usage', {}).get('total_usage', 0)
+                system_cpu = cpu_stats.get('system_cpu_usage', 0)
+                presystem_cpu = precpu_stats.get('system_cpu_usage', 0)
+                cpu_delta = cpu_usage - precpu_usage
+                system_delta = system_cpu - presystem_cpu
+                online_cpus = cpu_stats.get('online_cpus', 1)
+                if system_delta > 0 and cpu_delta > 0:
+                    cpu_percent = (cpu_delta / system_delta) * online_cpus * 100.0
+                    
+                # Calculate Memory Usage
+                memory_stats = stats.get('memory_stats', {})
+                mem_usage = memory_stats.get('usage', 0)
+                mem_limit = memory_stats.get('limit', 1)
+                
+                mem_usage_mb = round(mem_usage / (1024 * 1024), 2)
+                mem_limit_mb = round(mem_limit / (1024 * 1024), 2)
+                mem_percent = round((mem_usage / mem_limit) * 100.0, 2)
+                cpu_percent = round(cpu_percent, 2)
+                
+                res = {
+                    "status": "running",
+                    "cpu_percent": cpu_percent,
+                    "memory_usage_mb": mem_usage_mb,
+                    "memory_limit_mb": mem_limit_mb,
+                    "memory_percent": mem_percent
+                }
+                
+                # Cache it
+                _app_stats_cache[app_name] = {
+                    **res,
+                    "user_id": current_uid
+                }
+            except docker.errors.NotFound:
+                deployment.status = "stopped"
+                db.commit()
+                res = {
+                    "status": "stopped", 
+                    "cpu_percent": 0.0, 
+                    "memory_usage_mb": 0.0, 
+                    "memory_limit_mb": 0.0, 
+                    "memory_percent": 0.0
+                }
+            except Exception as e:
+                res = {
+                    "status": "error", 
+                    "message": str(e), 
+                    "cpu_percent": 0.0, 
+                    "memory_usage_mb": 0.0, 
+                    "memory_limit_mb": 0.0, 
+                    "memory_percent": 0.0
+                }
+                
+    # Inject database metadata fields for frontend real-time tracking
+    res["updated_at"] = deployment.updated_at.isoformat() if deployment.updated_at else None
+    res["auto_deploy"] = deployment.auto_deploy
+    res["last_commit_hash"] = deployment.last_commit_hash
+    return res
+
+@app.get("/api/system-info")
+def get_system_info(current_uid: str = Depends(get_current_user)):
+    try:
+        import platform
+        # Check host disk space via bind mount directory, falling back to local dir if running outside Docker
+        disk_path = "/app/frontend" if os.path.exists("/app/frontend") else "."
+        total, used, free = shutil.disk_usage(disk_path)
+        # Convert to GB
+        total_gb = round(total / (1024 * 1024 * 1024), 1)
+        used_gb = round(used / (1024 * 1024 * 1024), 1)
+        free_gb = round(free / (1024 * 1024 * 1024), 1)
+        disk_percent = round((used / total) * 100, 1) if total > 0 else 0
+        
+        try:
+            client = get_docker_client()
+            docker_version = client.version().get("Version", "Unknown") if client else "N/A"
+        except Exception:
+            docker_version = "Docker Host Unreachable"
+
         return {
-            "status": "stopped", 
-            "cpu_percent": 0.0, 
-            "memory_usage_mb": 0.0, 
-            "memory_limit_mb": 0.0, 
-            "memory_percent": 0.0
+            "cpu_cores": os.cpu_count() or 1,
+            "platform": platform.system(),
+            "disk_total_gb": total_gb,
+            "disk_used_gb": used_gb,
+            "disk_free_gb": free_gb,
+            "disk_percent": disk_percent,
+            "docker_version": docker_version
         }
     except Exception as e:
-        return {
-            "status": "error", 
-            "message": str(e), 
-            "cpu_percent": 0.0, 
-            "memory_usage_mb": 0.0, 
-            "memory_limit_mb": 0.0, 
-            "memory_percent": 0.0
-        }
+        return {"error": str(e)}
+
+@app.get("/api/deployments/history", response_model=list[DeploymentHistoryResponse])
+def get_deployment_history(db: Session = Depends(get_db), current_uid: str = Depends(get_current_user)):
+    history = db.query(DeploymentHistory).filter(DeploymentHistory.user_id == current_uid).order_by(DeploymentHistory.deployed_at.desc()).all()
+    return history
+
+@app.delete("/api/deployments/history")
+def clear_deployment_history(db: Session = Depends(get_db), current_uid: str = Depends(get_current_user)):
+    db.query(DeploymentHistory).filter(DeploymentHistory.user_id == current_uid).delete(synchronize_session=False)
+    db.commit()
+    return {"status": "success", "message": "Deployment history cleared successfully"}
+
+@app.delete("/api/deployments/history/{history_id}")
+def delete_history_item(history_id: int, db: Session = Depends(get_db), current_uid: str = Depends(get_current_user)):
+    item = db.query(DeploymentHistory).filter(DeploymentHistory.id == history_id, DeploymentHistory.user_id == current_uid).first()
+    if not item:
+        raise HTTPException(status_code=404, detail="History item not found")
+    db.delete(item)
+    db.commit()
+    return {"status": "success", "message": "History item deleted successfully"}
 
 @app.websocket("/ws/logs/{app_name}")
 async def websocket_logs(websocket: WebSocket, app_name: str, token: Optional[str] = None):

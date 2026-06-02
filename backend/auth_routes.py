@@ -39,6 +39,9 @@ class ProfileCreate(BaseModel):
 class PasswordUpdate(BaseModel):
     password: str
 
+class HistorySettingsUpdate(BaseModel):
+    save_history: bool
+
 @router.get("/config")
 def get_auth_config():
     return {
@@ -90,8 +93,18 @@ def get_profile(db: Session = Depends(get_db), current_uid: str = Depends(get_cu
         "use_case": profile.use_case,
         "company": profile.company,
         "email": profile.email,
-        "username": profile.username
+        "username": profile.username,
+        "save_history": getattr(profile, "save_history", True)
     }
+
+@router.post("/profile/history-settings")
+def update_history_settings(request: HistorySettingsUpdate, db: Session = Depends(get_db), current_uid: str = Depends(get_current_user)):
+    profile = db.query(UserProfile).filter(UserProfile.id == current_uid).first()
+    if not profile:
+        raise HTTPException(status_code=404, detail="Profile not found")
+    profile.save_history = request.save_history
+    db.commit()
+    return {"status": "success", "message": "History settings updated successfully"}
 
 @router.post("/profile")
 def create_profile(

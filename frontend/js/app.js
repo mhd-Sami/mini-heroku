@@ -55,6 +55,7 @@ async function fetchMetrics() {
     
     localStorage.setItem('mini_heroku_deployments_cache', JSON.stringify(deployments));
     updateMetricsUI(deployments);
+    generateActivityTimeline(deployments);
   } catch (err) {
     console.error('Error fetching metrics:', err);
   }
@@ -79,6 +80,7 @@ deployForm.addEventListener('submit', async (e) => {
   const cpu_limit = document.getElementById('cpu_limit').value;
   const memory_limit = document.getElementById('memory_limit').value.trim();
   const env_vars = getEnvVariables();
+  const auto_deploy = document.getElementById('auto_deploy').checked;
 
   const payload = {
     app_name,
@@ -86,7 +88,8 @@ deployForm.addEventListener('submit', async (e) => {
     port,
     cpu_limit: cpu_limit ? parseFloat(cpu_limit) : null,
     memory_limit: memory_limit || null,
-    env_vars
+    env_vars,
+    auto_deploy
   };
 
   const btnDeploy = document.getElementById('btn-deploy');
@@ -132,3 +135,111 @@ function loadCachedMetrics() {
 }
 loadCachedMetrics();
 fetchMetrics();
+
+// Quick Fill Suggestions for resource allocation parameters
+document.querySelectorAll('#cpu-suggestions .quick-tag').forEach(tag => {
+  tag.addEventListener('click', () => {
+    document.getElementById('cpu_limit').value = tag.getAttribute('data-value');
+  });
+});
+document.querySelectorAll('#mem-suggestions .quick-tag').forEach(tag => {
+  tag.addEventListener('click', () => {
+    document.getElementById('memory_limit').value = tag.getAttribute('data-value');
+  });
+});
+
+async function fetchSystemInfo() {
+  try {
+    const res = await authFetch(`${API_BASE}/api/system-info`);
+    if (!res.ok) throw new Error("Failed to fetch system info");
+    const data = await res.json();
+
+    document.getElementById('host-platform').textContent = data.platform || '--';
+    document.getElementById('host-cpu').textContent = `${data.cpu_cores || 1} Cores`;
+    document.getElementById('host-docker').textContent = data.docker_version || '--';
+
+    const diskFree = data.disk_free_gb || 0;
+    const diskPercent = data.disk_percent || 0;
+    document.getElementById('host-disk-text').textContent = `${diskFree} GB free`;
+    document.getElementById('host-disk-bar').style.width = `${diskPercent}%`;
+  } catch (err) {
+    console.error("Error loading host node info:", err);
+  }
+}
+
+function generateActivityTimeline(deployments) {
+  const timeline = document.getElementById('activity-timeline');
+  if (!timeline) return;
+
+  const events = [];
+
+  // Add system events
+  events.push({
+    title: "Vessel Daemon online",
+    desc: "Connection to Docker socket initialized",
+    time: new Date(Date.now() - 60000 * 55).toLocaleTimeString(),
+    type: "system"
+  });
+  events.push({
+    title: "Git Poller active",
+    desc: "Auto-deployment remote commit checks active (60s loop)",
+    time: new Date(Date.now() - 60000 * 30).toLocaleTimeString(),
+    type: "poller"
+  });
+
+  // Add application specific events
+  deployments.forEach(app => {
+    let title = "";
+    let desc = "";
+    let type = "info";
+    const dateStr = new Date(app.updated_at || app.created_at).toLocaleTimeString();
+
+    if (app.status === 'running') {
+      title = `${app.app_name} is running`;
+      desc = `Routing active: http://${app.app_name}.localhost`;
+      type = "success";
+    } else if (app.status === 'stopped') {
+      title = `${app.app_name} container stopped`;
+      desc = `Deployment preserved`;
+      type = "stopped";
+    } else if (app.status === 'failed') {
+      title = `${app.app_name} build failed`;
+      desc = `Check build logs for errors`;
+      type = "danger";
+    } else if (app.status === 'building') {
+      title = `${app.app_name} building`;
+      desc = `Compiling layers via BuildKit`;
+      type = "building";
+    }
+
+    events.push({
+      title,
+      desc,
+      time: dateStr,
+      type
+    });
+  });
+
+  timeline.innerHTML = '';
+  events.forEach(ev => {
+    let dotColor = "var(--color-text-muted)";
+    if (ev.type === 'success') dotColor = "var(--color-success)";
+    if (ev.type === 'building') dotColor = "var(--color-info)";
+    if (ev.type === 'danger') dotColor = "var(--color-danger)";
+    if (ev.type === 'system' || ev.type === 'poller') dotColor = "var(--color-accent)";
+
+    const row = document.createElement('div');
+    row.style.cssText = 'display: flex; gap: 0.75rem; align-items: flex-start; margin-bottom: 0.8rem; position: relative;';
+    row.innerHTML = `
+      <span class="pulse-dot" style="background-color: ${dotColor}; margin-top: 0.25rem; width: 6px; height: 6px; flex-shrink: 0; transform: scale(1.15);"></span>
+      <div style="display: flex; flex-direction: column; gap: 0.1rem; flex: 1;">
+        <span style="font-weight: 600; color: var(--color-text-main); line-height: 1.2;">${ev.title}</span>
+        <span style="color: var(--color-text-muted); font-size: 0.72rem; line-height: 1.2;">${ev.desc}</span>
+      </div>
+      <span style="color: var(--color-text-muted); font-size: 0.7rem; flex-shrink: 0; font-family: var(--font-family-mono);">${ev.time}</span>
+    `;
+    timeline.appendChild(row);
+  });
+}
+
+fetchSystemInfo();

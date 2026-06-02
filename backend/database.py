@@ -1,6 +1,6 @@
 import os
 from datetime import datetime
-from sqlalchemy import create_engine, Column, Integer, String, Float, Text, DateTime, ForeignKey, text, inspect
+from sqlalchemy import create_engine, Column, Integer, String, Float, Text, DateTime, ForeignKey, text, inspect, Boolean
 from sqlalchemy.orm import declarative_base, sessionmaker, relationship
 
 from urllib.parse import quote_plus, unquote
@@ -62,6 +62,7 @@ class UserProfile(Base):
     username = Column(String, unique=True, nullable=True)
     use_case = Column(String, nullable=False)
     company = Column(String, nullable=True)
+    save_history = Column(Boolean, default=True)
     created_at = Column(DateTime, default=datetime.utcnow)
 
 class Deployment(Base):
@@ -79,16 +80,44 @@ class Deployment(Base):
     container_id = Column(String, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     user_id = Column(String, nullable=True)
+    auto_deploy = Column(Boolean, default=False)
+    last_commit_hash = Column(String, nullable=True)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+class DeploymentHistory(Base):
+    __tablename__ = "deployment_history"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(String, index=True, nullable=False)
+    app_name = Column(String, nullable=False)
+    git_url = Column(String, nullable=False)
+    status = Column(String, nullable=False)  # success, failed
+    last_commit_hash = Column(String, nullable=True)
+    deployed_at = Column(DateTime, default=datetime.utcnow)
 
 def init_db():
     Base.metadata.create_all(bind=engine)
-    # Check if table deployments exists and if it has user_id column
+    # Check if table deployments exists and if it has required columns
     inspector = inspect(engine)
     if 'deployments' in inspector.get_table_names():
         columns = [col['name'] for col in inspector.get_columns('deployments')]
-        if 'user_id' not in columns:
-            with engine.begin() as conn:
+        with engine.begin() as conn:
+            if 'user_id' not in columns:
                 conn.execute(text("ALTER TABLE deployments ADD COLUMN user_id TEXT"))
+            if 'auto_deploy' not in columns:
+                conn.execute(text("ALTER TABLE deployments ADD COLUMN auto_deploy BOOLEAN DEFAULT 0"))
+            if 'last_commit_hash' not in columns:
+                conn.execute(text("ALTER TABLE deployments ADD COLUMN last_commit_hash TEXT"))
+            if 'updated_at' not in columns:
+                # Add default current timestamp for postgres/sqlite compatible formats
+                conn.execute(text("ALTER TABLE deployments ADD COLUMN updated_at TIMESTAMP"))
+
+    # Check if table user_profiles exists and if it has save_history column
+    if 'user_profiles' in inspector.get_table_names():
+        columns = [col['name'] for col in inspector.get_columns('user_profiles')]
+        with engine.begin() as conn:
+            if 'save_history' not in columns:
+                conn.execute(text("ALTER TABLE user_profiles ADD COLUMN save_history BOOLEAN DEFAULT 1"))
 
 def get_db():
     db = SessionLocal()

@@ -5,6 +5,9 @@
 
 -- Migration statement for existing tables:
 -- ALTER TABLE public.user_profiles ADD COLUMN IF NOT EXISTS username VARCHAR(255) UNIQUE;
+-- ALTER TABLE public.deployments ADD COLUMN IF NOT EXISTS auto_deploy BOOLEAN DEFAULT FALSE;
+-- ALTER TABLE public.deployments ADD COLUMN IF NOT EXISTS last_commit_hash VARCHAR(255);
+-- ALTER TABLE public.deployments ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL;
 
 CREATE TABLE IF NOT EXISTS public.user_profiles (
     id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
@@ -46,7 +49,10 @@ CREATE TABLE IF NOT EXISTS public.deployments (
     env_vars TEXT, -- Serialized JSON string of environment variables
     container_id VARCHAR(255),
     created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL,
-    user_id UUID REFERENCES auth.users(id) ON DELETE SET NULL
+    user_id UUID REFERENCES auth.users(id) ON DELETE SET NULL,
+    auto_deploy BOOLEAN DEFAULT FALSE NOT NULL,
+    last_commit_hash VARCHAR(255),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
 );
 
 -- Enable Row Level Security (RLS)
