@@ -21,16 +21,18 @@
   <header class="app-header" id="app-header"></header>
 
   <main class="dashboard-container">
-    <div class="workspace-grid" style="grid-template-columns: 1fr;">
+    <div class="workspace-grid" style="grid-template-columns: 1fr; max-width: 1400px; margin: 0 auto; width: 100%;">
       <!-- Active App Grid Panel -->
-      <section class="workspace-card grid-section" aria-labelledby="grid-heading">
-        <div class="card-header" style="margin-bottom: 1rem;">
-          <h2 id="grid-heading">Active Deployments</h2>
-          <p class="card-subtitle">Manage and monitor running containers</p>
+      <section class="grid-section" aria-labelledby="grid-heading" style="padding: 0; background: transparent; border: none; box-shadow: none;">
+        <div style="margin-bottom: 1.5rem; display: flex; justify-content: space-between; align-items: flex-end; flex-wrap: wrap; gap: 1rem; border-bottom: 1px solid var(--color-bg-alt); padding-bottom: 1rem;">
+          <div>
+            <h2 id="grid-heading" style="font-family: var(--font-family-title); font-size: 1.65rem; font-weight: 800; color: var(--color-text-main); margin-bottom: 0.25rem;">Active Deployments</h2>
+            <p class="card-subtitle" style="margin-bottom: 0;">Manage and monitor running containers</p>
+          </div>
         </div>
 
         <!-- Tab navigation selector -->
-        <div class="tabs-nav">
+        <div class="tabs-nav" style="margin-bottom: 2rem;">
           <button type="button" class="tab-btn active" id="tab-active">Active Deployments</button>
           <button type="button" class="tab-btn" id="tab-history">Deployment History</button>
         </div>
@@ -75,14 +77,14 @@
           </div>
 
           <!-- Loading state placeholder -->
-          <div id="loading-state" class="empty-state">
+          <div id="loading-state" class="empty-state" style="background-color: var(--color-bg-surface); border: 1px solid var(--color-bg-alt); border-radius: var(--radius-md); box-shadow: var(--shadow-sm);">
             <div class="loading-spinner"></div>
             <h3>Loading deployments...</h3>
             <p>Connecting to Vessel daemon and fetching active containers</p>
           </div>
 
           <!-- Empty state placeholder -->
-          <div id="empty-state" class="empty-state hidden">
+          <div id="empty-state" class="empty-state hidden" style="background-color: var(--color-bg-surface); border: 1px solid var(--color-bg-alt); border-radius: var(--radius-md); box-shadow: var(--shadow-sm);">
             <div class="empty-icon-svg">
               <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
             </div>
@@ -122,7 +124,7 @@
           </div>
 
           <!-- Empty History state placeholder -->
-          <div id="history-empty-state" class="empty-state hidden" style="border: none; background: transparent; padding: 4rem 2rem;">
+          <div id="history-empty-state" class="empty-state hidden" style="border: 1px solid var(--color-bg-alt); background: var(--color-bg-surface); border-radius: var(--radius-md); box-shadow: var(--shadow-sm); padding: 4rem 2rem;">
             <div class="empty-icon-svg">
               <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 8v4l3 3m6-3a9 9 0 1 1-18 0 9 9 0 0 1 18 0z"/></svg>
             </div>

@@ -620,3 +620,11 @@ input:focus {
   color: var(--color-danger);
   background-color: var(--color-danger-bg);
 }
+
+/* Deploy Form Modal Body override */
+.modal-body-form {
+  background-color: var(--color-bg-surface) !important;
+  padding: 1.75rem 2rem !important;
+  overflow-y: auto !important;
+  display: block !important;
+}

@@ -53,85 +53,59 @@
 
     <!-- Main Content Workspace -->
     <div class="workspace-grid" style="grid-template-columns: 1fr 380px; max-width: 1400px; margin: 0 auto; width: 100%; gap: 2rem; align-items: start;">
-      <!-- Left Column: Deploy Form -->
+      <!-- Left Column: Hero Banner & Active Services Summary -->
       <div style="display: flex; flex-direction: column; gap: 2rem;">
-        <section class="workspace-card form-section" aria-labelledby="form-heading">
-          <div class="card-header">
-            <h2 id="form-heading">Deploy Application</h2>
-            <p class="card-subtitle">Connect a Git repository to build and launch a container via Traefik routing</p>
+        <!-- Hero Banner Card -->
+        <section class="workspace-card hero-section" style="padding: 2.5rem; background: linear-gradient(135deg, rgba(37, 99, 235, 0.04) 0%, rgba(14, 165, 233, 0.04) 100%); border-color: rgba(37, 99, 235, 0.12); position: relative; overflow: hidden;">
+          <div style="position: absolute; right: -50px; bottom: -50px; opacity: 0.12; color: var(--color-accent); pointer-events: none;">
+            <svg width="240" height="240" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/></svg>
           </div>
-
-          <form id="deploy-form" class="deploy-form">
-            <!-- Section 1: General Specifications -->
-            <div style="border-bottom: 1px dashed var(--color-bg-alt); padding-bottom: 0.75rem; margin-bottom: 0.5rem;">
-              <h4 style="font-size: 0.9rem; font-weight: 700; color: var(--color-accent); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.8rem;">1. App Specifications</h4>
-              <div class="form-group" style="margin-bottom: 1rem;">
-                <label for="app_name">Application Name</label>
-                <input type="text" id="app_name" name="app_name" placeholder="e.g. static-site" required pattern="^[a-zA-Z0-9-]+$" title="Alphanumeric characters and hyphens only">
-                <span class="input-hint">Used as subdomain (http://app-name.localhost)</span>
-              </div>
-
-              <div class="form-group" style="margin-bottom: 1rem;">
-                <label for="git_url">Git Repository URL</label>
-                <input type="url" id="git_url" name="git_url" placeholder="https://github.com/username/repo.git" required>
-                <span class="input-hint">Repository must contain a root Dockerfile</span>
-              </div>
-              
-              <div class="form-group" style="margin-bottom: 0.5rem;">
-                <label for="port">Container Port</label>
-                <input type="number" id="port" name="port" value="80" min="1" max="65535" required>
-                <span class="input-hint">The port your app binds to inside the container (e.g. 80 for Nginx, 5000 for Flask/Python, 8000 for FastAPI)</span>
-              </div>
+          <div style="max-width: 600px; position: relative; z-index: 2;">
+            <h2 style="font-family: var(--font-family-title); font-size: 1.85rem; font-weight: 800; color: var(--color-text-main); margin-bottom: 0.75rem; letter-spacing: -0.02em; line-height: 1.25;">Deploy & Scale Applications</h2>
+            <p style="color: var(--color-text-muted); font-size: 0.92rem; line-height: 1.6; margin-bottom: 1.75rem;">Connect a Git repository. Vessel automatically compiles your container using BuildKit, assigns port routing, and registers it with the Traefik daemon.</p>
+            <div style="display: flex; gap: 0.75rem; align-items: center; flex-wrap: wrap;">
+              <button type="button" id="btn-hero-deploy-trigger" class="btn btn-primary" style="padding: 0.7rem 1.35rem; box-shadow: 0 4px 12px rgba(37, 99, 235, 0.2);">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                Create New Deployment
+              </button>
+              <a href="apps.html" class="btn btn-secondary" style="padding: 0.7rem 1.35rem;">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/></svg>
+                View Active Services
+              </a>
             </div>
+          </div>
+        </section>
 
-            <!-- Section 2: Resource Allocation -->
-            <div style="border-bottom: 1px dashed var(--color-bg-alt); padding-bottom: 0.75rem; margin-bottom: 0.5rem;">
-              <h4 style="font-size: 0.9rem; font-weight: 700; color: var(--color-accent); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.8rem;">2. Resource Allocation</h4>
-              <div class="form-row-2" style="margin-bottom: 0.75rem;">
-                <div class="form-group">
-                  <label for="cpu_limit">CPU Limit (Cores)</label>
-                  <input type="number" id="cpu_limit" name="cpu_limit" placeholder="e.g. 0.5" step="0.1" min="0.1">
-                  <div class="quick-fill-group" id="cpu-suggestions">
-                    <span class="quick-tag" data-value="0.2">0.2</span>
-                    <span class="quick-tag" data-value="0.5">0.5</span>
-                    <span class="quick-tag" data-value="1.0">1.0</span>
-                  </div>
-                </div>
-                <div class="form-group">
-                  <label for="memory_limit">Memory Limit</label>
-                  <input type="text" id="memory_limit" name="memory_limit" placeholder="e.g. 512m, 1g">
-                  <div class="quick-fill-group" id="mem-suggestions">
-                    <span class="quick-tag" data-value="256m">256M</span>
-                    <span class="quick-tag" data-value="512m">512M</span>
-                    <span class="quick-tag" data-value="1g">1G</span>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <!-- Section 3: Configuration Variables -->
+        <!-- Active Services Summary Card -->
+        <section class="workspace-card" style="padding: 1.75rem;">
+          <div class="card-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.25rem; border-bottom: 1px solid var(--color-bg-alt); padding-bottom: 0.75rem;">
             <div>
-              <h4 style="font-size: 0.9rem; font-weight: 700; color: var(--color-accent); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.8rem;">3. Environment Variables</h4>
-              <!-- Environmental Variables Dynamic Input -->
-              <div class="form-group env-variables-section">
-                <label>Environment Variables</label>
-                <div id="env-list" class="env-list">
-                  <!-- Dynamically populated key-value inputs -->
-                </div>
-                <button type="button" id="btn-add-env" class="btn btn-secondary btn-sm">+ Add Variable</button>
-              </div>
+              <h3 style="font-family: var(--font-family-title); font-size: 1.15rem; font-weight: 700; color: var(--color-text-main); margin-bottom: 0.15rem;">Active Services Summary</h3>
+              <p class="card-subtitle" style="margin-bottom: 0;">Quick overview of running container subdomains</p>
             </div>
-            
-            <!-- Auto Deployment Option -->
-            <div class="form-group" style="display: flex; align-items: center; gap: 0.5rem; flex-direction: row; margin: 0.5rem 0;">
-              <input type="checkbox" id="auto_deploy" name="auto_deploy" style="width: auto; margin-right: 0.25rem; transform: scale(1.15); cursor: pointer;">
-              <label for="auto_deploy" style="margin-bottom: 0; cursor: pointer; text-transform: none; font-weight: 600; font-size: 0.88rem; color: var(--color-text-main);">Enable auto-deployment on new git changes</label>
-            </div>
-
-            <button type="submit" id="btn-deploy" class="btn btn-primary btn-block">
-              <span>Launch Deployment</span>
-            </button>
-          </form>
+            <a href="apps.html" style="font-size: 0.78rem; font-weight: 700; color: var(--color-accent); display: flex; align-items: center; gap: 0.25rem; transition: color var(--transition-fast);">
+              See all
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+            </a>
+          </div>
+          
+          <div id="active-services-summary-wrapper" class="history-table-wrapper" style="border: 1px solid var(--color-bg-alt); border-radius: var(--radius-md); overflow: hidden; background: var(--color-bg-surface);">
+            <table class="history-table" style="margin-bottom: 0;">
+              <thead>
+                <tr>
+                  <th style="padding: 0.75rem 1rem;">Service Name</th>
+                  <th style="padding: 0.75rem 1rem;">Domain Address</th>
+                  <th style="padding: 0.75rem 1rem;">Status</th>
+                  <th style="padding: 0.75rem 1rem; text-align: right; padding-right: 1.5rem;">Action</th>
+                </tr>
+              </thead>
+              <tbody id="summary-table-body">
+                <tr>
+                  <td colspan="4" style="color: var(--color-text-muted); text-align: center; padding: 2rem;">Loading active services...</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
         </section>
       </div>
 
@@ -194,6 +168,89 @@ CMD ["uvicorn", "main:app"]</pre>
       <p>Mini-Heroku PaaS • Powered by Traefik, Docker, and FastAPI</p>
     </div>
   </footer>
+
+  <!-- Deploy Floating Modal -->
+  <div id="deploy-modal" class="modal" aria-hidden="true" role="dialog">
+    <div class="modal-backdrop"></div>
+    <div class="modal-content" style="max-width: 620px;">
+      <div class="modal-header" style="background-color: var(--color-bg-cream);">
+        <div class="modal-title-group">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--color-accent)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="color: var(--color-accent);"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          <h3 style="font-family: var(--font-family-title); font-size: 1.2rem; font-weight: 700; margin: 0;">Deploy New Application</h3>
+        </div>
+        <button type="button" id="btn-close-deploy-modal" class="btn-close">&times;</button>
+      </div>
+      <div class="modal-body-form">
+        <form id="deploy-form" class="deploy-form">
+          <!-- Specifications -->
+          <div style="margin-bottom: 1.25rem; border-bottom: 1px dashed var(--color-bg-alt); padding-bottom: 1rem;">
+            <h4 style="font-size: 0.85rem; font-weight: 700; color: var(--color-accent); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.8rem;">1. App Specifications</h4>
+            <div class="form-group" style="margin-bottom: 0.85rem;">
+              <label for="app_name">Application Name</label>
+              <input type="text" id="app_name" name="app_name" placeholder="e.g. static-site" required pattern="^[a-zA-Z0-9-]+$" title="Alphanumeric characters and hyphens only">
+              <span class="input-hint">Used as subdomain (http://app-name.localhost)</span>
+            </div>
+
+            <div class="form-group" style="margin-bottom: 0.85rem;">
+              <label for="git_url">Git Repository URL</label>
+              <input type="url" id="git_url" name="git_url" placeholder="https://github.com/username/repo.git" required>
+              <span class="input-hint">Repository must contain a root Dockerfile</span>
+            </div>
+            
+            <div class="form-group" style="margin-bottom: 0.5rem;">
+              <label for="port">Container Port</label>
+              <input type="number" id="port" name="port" value="80" min="1" max="65535" required>
+              <span class="input-hint">The port your app binds to inside the container</span>
+            </div>
+          </div>
+
+          <!-- Resource Allocation -->
+          <div style="margin-bottom: 1.25rem; border-bottom: 1px dashed var(--color-bg-alt); padding-bottom: 1rem;">
+            <h4 style="font-size: 0.85rem; font-weight: 700; color: var(--color-accent); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.8rem;">2. Resource Allocation</h4>
+            <div class="form-row-2" style="margin-bottom: 0.5rem;">
+              <div class="form-group">
+                <label for="cpu_limit">CPU Limit (Cores)</label>
+                <input type="number" id="cpu_limit" name="cpu_limit" placeholder="e.g. 0.5" step="0.1" min="0.1">
+                <div class="quick-fill-group" id="cpu-suggestions">
+                  <span class="quick-tag" data-value="0.2">0.2</span>
+                  <span class="quick-tag" data-value="0.5">0.5</span>
+                  <span class="quick-tag" data-value="1.0">1.0</span>
+                </div>
+              </div>
+              <div class="form-group">
+                <label for="memory_limit">Memory Limit</label>
+                <input type="text" id="memory_limit" name="memory_limit" placeholder="e.g. 512m, 1g">
+                <div class="quick-fill-group" id="mem-suggestions">
+                  <span class="quick-tag" data-value="256m">256M</span>
+                  <span class="quick-tag" data-value="512m">512M</span>
+                  <span class="quick-tag" data-value="1g">1G</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Environment Variables -->
+          <div style="margin-bottom: 1.25rem;">
+            <h4 style="font-size: 0.85rem; font-weight: 700; color: var(--color-accent); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.8rem;">3. Environment Variables</h4>
+            <div class="form-group env-variables-section">
+              <div id="env-list" class="env-list"></div>
+              <button type="button" id="btn-add-env" class="btn btn-secondary btn-sm" style="margin-top: 0.25rem;">+ Add Variable</button>
+            </div>
+          </div>
+          
+          <!-- Auto Deploy -->
+          <div class="form-group" style="display: flex; align-items: center; gap: 0.5rem; flex-direction: row; margin: 0.5rem 0 1.25rem 0;">
+            <input type="checkbox" id="auto_deploy" name="auto_deploy" style="width: auto; margin-right: 0.25rem; transform: scale(1.15); cursor: pointer;">
+            <label for="auto_deploy" style="margin-bottom: 0; cursor: pointer; text-transform: none; font-weight: 600; font-size: 0.85rem; color: var(--color-text-main);">Enable auto-deployment on new git changes</label>
+          </div>
+
+          <button type="submit" id="btn-deploy" class="btn btn-primary btn-block">
+            <span>Launch Deployment</span>
+          </button>
+        </form>
+      </div>
+    </div>
+  </div>
 
   <script type="module" src="js/app.js"></script>
 </body>

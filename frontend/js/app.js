@@ -55,6 +55,7 @@ async function fetchMetrics() {
     
     localStorage.setItem('mini_heroku_deployments_cache', JSON.stringify(deployments));
     updateMetricsUI(deployments);
+    renderActiveServicesSummary(deployments);
     generateActivityTimeline(deployments);
   } catch (err) {
     console.error('Error fetching metrics:', err);
@@ -71,53 +72,167 @@ function updateMetricsUI(deployments) {
    Deployment Submission
    ========================================================================== */
 
-deployForm.addEventListener('submit', async (e) => {
-  e.preventDefault();
+/* ==========================================================================
+   Active Services Summary Table
+   ========================================================================== */
 
-  const app_name = document.getElementById('app_name').value.trim().toLowerCase();
-  const git_url = document.getElementById('git_url').value.trim();
-  const port = parseInt(document.getElementById('port').value, 10);
-  const cpu_limit = document.getElementById('cpu_limit').value;
-  const memory_limit = document.getElementById('memory_limit').value.trim();
-  const env_vars = getEnvVariables();
-  const auto_deploy = document.getElementById('auto_deploy').checked;
+function renderActiveServicesSummary(deployments) {
+  const summaryTableBody = document.getElementById('summary-table-body');
+  if (!summaryTableBody) return;
 
-  const payload = {
-    app_name,
-    git_url,
-    port,
-    cpu_limit: cpu_limit ? parseFloat(cpu_limit) : null,
-    memory_limit: memory_limit || null,
-    env_vars,
-    auto_deploy
-  };
+  const runningApps = deployments.filter(d => d.status === 'running');
 
-  const btnDeploy = document.getElementById('btn-deploy');
-  btnDeploy.disabled = true;
-  btnDeploy.querySelector('span').innerHTML = '<span class="btn-spinner"></span> Initiating...';
-
-  try {
-    const res = await authFetch(`${API_BASE}/api/deploy`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload)
-    });
-
-    const data = await res.json();
-    if (!res.ok) {
-      throw new Error(data.detail || 'Deployment failed to initialize');
+  if (runningApps.length === 0) {
+    summaryTableBody.innerHTML = `
+      <tr>
+        <td colspan="4" style="color: var(--color-text-muted); text-align: center; padding: 2rem; font-size: 0.85rem;">
+          No active services running. <a href="#" id="summary-deploy-link" style="color: var(--color-accent); font-weight: 600; text-decoration: underline;">Deploy one now</a>
+        </td>
+      </tr>
+    `;
+    const link = document.getElementById('summary-deploy-link');
+    if (link) {
+      link.addEventListener('click', (e) => {
+        e.preventDefault();
+        openDeployModal();
+      });
     }
+    return;
+  }
 
-    // Redirect to active deployments grid on success
-    window.location.href = `apps.html?deploying=${app_name}`;
+  const topApps = runningApps.slice(0, 4);
+  summaryTableBody.innerHTML = '';
 
-  } catch (err) {
-    alert(`Deployment error: ${err.message}`);
-  } finally {
-    btnDeploy.disabled = false;
-    btnDeploy.querySelector('span').textContent = 'Launch Deployment';
+  topApps.forEach(app => {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td style="font-weight: 600; color: var(--color-text-main); font-size: 0.85rem; padding: 0.75rem 1rem; border-bottom: 1px solid var(--color-bg-alt);">${app.app_name}</td>
+      <td style="font-size: 0.82rem; padding: 0.75rem 1rem; border-bottom: 1px solid var(--color-bg-alt);">
+        <a href="${app.local_domain}" target="_blank" style="color: var(--color-primary-light); font-weight: 500;">${app.app_name}.localhost</a>
+      </td>
+      <td style="padding: 0.75rem 1rem; border-bottom: 1px solid var(--color-bg-alt);">
+        <span class="status-badge running" style="padding: 0.15rem 0.5rem; font-size: 0.7rem;">
+          <span class="pulse-dot"></span>
+          <span class="status-text">running</span>
+        </span>
+      </td>
+      <td style="text-align: right; padding: 0.75rem 1rem; padding-right: 1.5rem; border-bottom: 1px solid var(--color-bg-alt);">
+        <a href="app-details.html?app=${app.app_name}" class="btn btn-secondary btn-sm" style="padding: 0.25rem 0.6rem; font-size: 0.75rem; font-weight: 600; display: inline-flex; align-items: center; gap: 0.25rem;">
+          Manage
+          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+        </a>
+      </td>
+    `;
+    summaryTableBody.appendChild(tr);
+  });
+}
+
+/* ==========================================================================
+   Deploy Modal Logic
+   ========================================================================== */
+
+const deployModal = document.getElementById('deploy-modal');
+const btnHeroDeployTrigger = document.getElementById('btn-hero-deploy-trigger');
+const btnCloseDeployModal = document.getElementById('btn-close-deploy-modal');
+const modalBackdrop = deployModal ? deployModal.querySelector('.modal-backdrop') : null;
+
+function openDeployModal() {
+  if (deployModal) {
+    deployModal.classList.add('active');
+    deployModal.setAttribute('aria-hidden', 'false');
+  }
+}
+
+function closeDeployModal() {
+  if (deployModal) {
+    deployModal.classList.remove('active');
+    deployModal.setAttribute('aria-hidden', 'true');
+    if (deployForm) deployForm.reset();
+    if (envList) envList.innerHTML = '';
+  }
+}
+
+if (btnHeroDeployTrigger) {
+  btnHeroDeployTrigger.addEventListener('click', openDeployModal);
+}
+if (btnCloseDeployModal) {
+  btnCloseDeployModal.addEventListener('click', closeDeployModal);
+}
+if (modalBackdrop) {
+  modalBackdrop.addEventListener('click', closeDeployModal);
+}
+
+// Global hook for navbar shortcut trigger if on index page
+document.addEventListener('click', (e) => {
+  const btn = e.target.closest('.btn-nav-deploy');
+  if (btn) {
+    e.preventDefault();
+    openDeployModal();
   }
 });
+
+function checkActionParam() {
+  const urlParams = new URLSearchParams(window.location.search);
+  if (urlParams.get('action') === 'deploy') {
+    openDeployModal();
+    const newUrl = window.location.pathname;
+    window.history.replaceState({}, document.title, newUrl);
+  }
+}
+
+/* ==========================================================================
+   Deployment Submission
+   ========================================================================== */
+
+if (deployForm) {
+  deployForm.addEventListener('submit', async (e) => {
+    e.preventDefault();
+
+    const app_name = document.getElementById('app_name').value.trim().toLowerCase();
+    const git_url = document.getElementById('git_url').value.trim();
+    const port = parseInt(document.getElementById('port').value, 10);
+    const cpu_limit = document.getElementById('cpu_limit').value;
+    const memory_limit = document.getElementById('memory_limit').value.trim();
+    const env_vars = getEnvVariables();
+    const auto_deploy = document.getElementById('auto_deploy').checked;
+
+    const payload = {
+      app_name,
+      git_url,
+      port,
+      cpu_limit: cpu_limit ? parseFloat(cpu_limit) : null,
+      memory_limit: memory_limit || null,
+      env_vars,
+      auto_deploy
+    };
+
+    const btnDeploy = document.getElementById('btn-deploy');
+    btnDeploy.disabled = true;
+    btnDeploy.querySelector('span').innerHTML = '<span class="btn-spinner"></span> Initiating...';
+
+    try {
+      const res = await authFetch(`${API_BASE}/api/deploy`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.detail || 'Deployment failed to initialize');
+      }
+
+      closeDeployModal();
+      window.location.href = `apps.html?deploying=${app_name}`;
+
+    } catch (err) {
+      alert(`Deployment error: ${err.message}`);
+    } finally {
+      btnDeploy.disabled = false;
+      btnDeploy.querySelector('span').textContent = 'Launch Deployment';
+    }
+  });
+}
 
 // Load metrics on start
 function loadCachedMetrics() {
@@ -127,6 +242,7 @@ function loadCachedMetrics() {
       const deployments = JSON.parse(cached);
       if (deployments) {
         updateMetricsUI(deployments);
+        renderActiveServicesSummary(deployments);
       }
     } catch (e) {
       console.error("Failed to parse cached metrics:", e);
@@ -135,16 +251,19 @@ function loadCachedMetrics() {
 }
 loadCachedMetrics();
 fetchMetrics();
+checkActionParam();
 
 // Quick Fill Suggestions for resource allocation parameters
 document.querySelectorAll('#cpu-suggestions .quick-tag').forEach(tag => {
   tag.addEventListener('click', () => {
-    document.getElementById('cpu_limit').value = tag.getAttribute('data-value');
+    const input = document.getElementById('cpu_limit');
+    if (input) input.value = tag.getAttribute('data-value');
   });
 });
 document.querySelectorAll('#mem-suggestions .quick-tag').forEach(tag => {
   tag.addEventListener('click', () => {
-    document.getElementById('memory_limit').value = tag.getAttribute('data-value');
+    const input = document.getElementById('memory_limit');
+    if (input) input.value = tag.getAttribute('data-value');
   });
 });
 
