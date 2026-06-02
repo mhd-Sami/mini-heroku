@@ -53,10 +53,25 @@ async function fetchMetrics() {
     if (!res.ok) throw new Error('Failed to load apps');
     const deployments = await res.json();
     
+    // Fetch deployment history for real-time activity timeline
+    let history = [];
+    try {
+      const histRes = await authFetch(`${API_BASE}/api/deployments/history`);
+      if (histRes.ok) {
+        history = await histRes.json();
+      }
+    } catch (e) {
+      console.error("Failed to load history in dashboard metrics:", e);
+    }
+    
     localStorage.setItem('mini_heroku_deployments_cache', JSON.stringify(deployments));
+    if (history.length > 0) {
+      localStorage.setItem('mini_heroku_history_cache', JSON.stringify(history));
+    }
+    
     updateMetricsUI(deployments);
     renderActiveServicesSummary(deployments);
-    generateActivityTimeline(deployments);
+    generateActivityTimeline(deployments, history);
   } catch (err) {
     console.error('Error fetching metrics:', err);
   }
@@ -286,58 +301,71 @@ async function fetchSystemInfo() {
   }
 }
 
-function generateActivityTimeline(deployments) {
+function generateActivityTimeline(deployments, history = []) {
   const timeline = document.getElementById('activity-timeline');
   if (!timeline) return;
 
   const events = [];
 
-  // Add system events
+  // Add system events (static benchmark for session)
   events.push({
     title: "Vessel Daemon online",
-    desc: "Connection to Docker socket initialized",
-    time: new Date(Date.now() - 60000 * 55).toLocaleTimeString(),
+    desc: "Connection to Docker socket active",
+    timestamp: new Date(Date.now() - 3600 * 1000 * 2), // 2 hours ago
     type: "system"
   });
-  events.push({
-    title: "Git Poller active",
-    desc: "Auto-deployment remote commit checks active (60s loop)",
-    time: new Date(Date.now() - 60000 * 30).toLocaleTimeString(),
-    type: "poller"
-  });
 
-  // Add application specific events
-  deployments.forEach(app => {
-    let title = "";
-    let desc = "";
-    let type = "info";
-    const dateStr = new Date(app.updated_at || app.created_at).toLocaleTimeString();
-
-    if (app.status === 'running') {
-      title = `${app.app_name} is running`;
-      desc = `Routing active: http://${app.app_name}.localhost`;
-      type = "success";
-    } else if (app.status === 'stopped') {
-      title = `${app.app_name} container stopped`;
-      desc = `Deployment preserved`;
-      type = "stopped";
-    } else if (app.status === 'failed') {
-      title = `${app.app_name} build failed`;
-      desc = `Check build logs for errors`;
-      type = "danger";
-    } else if (app.status === 'building') {
-      title = `${app.app_name} building`;
-      desc = `Compiling layers via BuildKit`;
-      type = "building";
+  // Add real history outcomes
+  history.forEach(item => {
+    if (item.status === 'success') {
+      events.push({
+        title: `${item.app_name} deployed successfully`,
+        desc: `Source: ${item.git_url}`,
+        timestamp: new Date(item.deployed_at),
+        type: "success"
+      });
+    } else {
+      events.push({
+        title: `${item.app_name} build failed`,
+        desc: `Compilation error. Source: ${item.git_url}`,
+        timestamp: new Date(item.deployed_at),
+        type: "danger"
+      });
     }
-
-    events.push({
-      title,
-      desc,
-      time: dateStr,
-      type
-    });
   });
+
+  // Add active compilation or stopped status from current deployments
+  deployments.forEach(app => {
+    const appTime = new Date(app.updated_at || app.created_at);
+    
+    if (app.status === 'building') {
+      events.push({
+        title: `${app.app_name} is compiling`,
+        desc: `Docker image layers building...`,
+        timestamp: appTime,
+        type: "building"
+      });
+    } else if (app.status === 'stopped') {
+      events.push({
+        title: `${app.app_name} container stopped`,
+        desc: `Container paused manually or halted`,
+        timestamp: appTime,
+        type: "stopped"
+      });
+    }
+  });
+
+  // Sort events by timestamp descending (newest first)
+  events.sort((a, b) => b.timestamp - a.timestamp);
+
+  if (events.length === 1) { // Only "Vessel Daemon online"
+    timeline.innerHTML = `
+      <div style="color: var(--color-text-muted); text-align: center; padding: 2rem 0; font-size: 0.8rem;">
+        No recent build activity.
+      </div>
+    `;
+    return;
+  }
 
   timeline.innerHTML = '';
   events.forEach(ev => {
@@ -345,7 +373,9 @@ function generateActivityTimeline(deployments) {
     if (ev.type === 'success') dotColor = "var(--color-success)";
     if (ev.type === 'building') dotColor = "var(--color-info)";
     if (ev.type === 'danger') dotColor = "var(--color-danger)";
-    if (ev.type === 'system' || ev.type === 'poller') dotColor = "var(--color-accent)";
+    if (ev.type === 'system') dotColor = "var(--color-accent)";
+
+    const timeStr = formatTimelineTime(ev.timestamp);
 
     const row = document.createElement('div');
     row.style.cssText = 'display: flex; gap: 0.75rem; align-items: flex-start; margin-bottom: 0.8rem; position: relative;';
@@ -353,12 +383,36 @@ function generateActivityTimeline(deployments) {
       <span class="pulse-dot" style="background-color: ${dotColor}; margin-top: 0.25rem; width: 6px; height: 6px; flex-shrink: 0; transform: scale(1.15);"></span>
       <div style="display: flex; flex-direction: column; gap: 0.1rem; flex: 1;">
         <span style="font-weight: 600; color: var(--color-text-main); line-height: 1.2;">${ev.title}</span>
-        <span style="color: var(--color-text-muted); font-size: 0.72rem; line-height: 1.2;">${ev.desc}</span>
+        <span style="color: var(--color-text-muted); font-size: 0.72rem; line-height: 1.2; max-width: 260px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${ev.desc}">${ev.desc}</span>
       </div>
-      <span style="color: var(--color-text-muted); font-size: 0.7rem; flex-shrink: 0; font-family: var(--font-family-mono);">${ev.time}</span>
+      <span style="color: var(--color-text-muted); font-size: 0.7rem; flex-shrink: 0; font-family: var(--font-family-mono);" title="${ev.timestamp.toLocaleString()}">${timeStr}</span>
     `;
     timeline.appendChild(row);
   });
 }
 
+function formatTimelineTime(date) {
+  const now = new Date();
+  const diffMs = now - date;
+  const diffMins = Math.floor(diffMs / 60000);
+  
+  if (diffMins < 1) return 'Just now';
+  if (diffMins < 60) return `${diffMins}m ago`;
+  
+  const diffHours = Math.floor(diffMins / 60);
+  if (diffHours < 24 && date.getDate() === now.getDate()) {
+    return `${diffHours}h ago`;
+  }
+  
+  const diffDays = Math.floor(diffHours / 24);
+  if (diffDays === 1) return 'Yesterday';
+  if (diffDays < 7) return `${diffDays}d ago`;
+  
+  return date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+}
+
+// Initial System Queries
 fetchSystemInfo();
+
+// Set dashboard updates to loop in real-time every 5 seconds
+setInterval(fetchMetrics, 5000);
