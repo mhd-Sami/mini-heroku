@@ -718,8 +718,14 @@ if (tabActive && tabHistory) {
     activeTab = 'active';
     tabActive.classList.add('active');
     tabHistory.classList.remove('active');
-    activeDeploymentsView.classList.remove('hidden');
+    
     historyView.classList.add('hidden');
+    historyView.classList.remove('tab-panel-fade');
+    activeDeploymentsView.classList.remove('hidden');
+    activeDeploymentsView.classList.remove('tab-panel-fade');
+    void activeDeploymentsView.offsetWidth; // Force DOM reflow to re-trigger animation
+    activeDeploymentsView.classList.add('tab-panel-fade');
+    
     fetchDeployments();
   });
 
@@ -728,8 +734,14 @@ if (tabActive && tabHistory) {
     activeTab = 'history';
     tabHistory.classList.add('active');
     tabActive.classList.remove('active');
+    
     activeDeploymentsView.classList.add('hidden');
+    activeDeploymentsView.classList.remove('tab-panel-fade');
     historyView.classList.remove('hidden');
+    historyView.classList.remove('tab-panel-fade');
+    void historyView.offsetWidth; // Force DOM reflow to re-trigger animation
+    historyView.classList.add('tab-panel-fade');
+    
     loadHistory();
   });
 }

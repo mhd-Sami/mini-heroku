@@ -553,7 +553,7 @@ input:focus {
   font-weight: 700;
 }
 
-.tab-btn.active::after {
+.tab-btn::after {
   content: '';
   position: absolute;
   bottom: -3px;
@@ -562,6 +562,31 @@ input:focus {
   height: 3px;
   background-color: var(--color-accent);
   border-radius: var(--radius-full);
+  opacity: 0;
+  transform: scaleX(0);
+  transform-origin: center;
+  transition: transform var(--transition-normal), opacity var(--transition-normal);
+}
+
+.tab-btn.active::after {
+  opacity: 1;
+  transform: scaleX(1);
+}
+
+/* Tab Panel Fade-in and Slide-up Transition */
+.tab-panel-fade {
+  animation: tabPanelFadeIn var(--transition-normal) forwards;
+}
+
+@keyframes tabPanelFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 /* History Logs Table layout */

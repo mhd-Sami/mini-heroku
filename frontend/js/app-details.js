@@ -9,6 +9,13 @@ let statsInterval = null;
 let lastStatus = ''; // Track last status to detect auto-deployment transitions
 let activeAppObj = null; // Store active app details object
 
+// Charts State
+let cpuChart = null;
+let memChart = null;
+let chartLabels = [];
+let cpuData = [];
+let memData = [];
+
 // DOM Elements
 const detailsAppName = document.getElementById('details-app-name');
 const detailsAppLink = document.getElementById('details-app-link');
@@ -16,9 +23,7 @@ const detailsStatusBadge = document.getElementById('details-status-badge');
 const detailsStatusText = document.getElementById('details-status-text');
 
 const detailsCpuVal = document.getElementById('details-cpu-val');
-const detailsCpuBar = document.getElementById('details-cpu-bar');
 const detailsMemVal = document.getElementById('details-mem-val');
-const detailsMemBar = document.getElementById('details-mem-bar');
 
 const detailsGitUrl = document.getElementById('details-git-url');
 const detailsPort = document.getElementById('details-port');
@@ -143,6 +148,11 @@ function renderDetails(app) {
 
   // Stream Logs
   connectLogs();
+
+  // Initialize charts once
+  if (!cpuChart && !memChart) {
+    initCharts();
+  }
 
   // Poll Stats
   startStatsPolling();
@@ -475,6 +485,89 @@ btnDetailsRestart.onclick = () => runAction('restart');
 btnDetailsDelete.onclick = deleteApp;
 
 /* ==========================================================================
+   Live Resource Charts Helper
+   ========================================================================== */
+
+function initCharts() {
+  const cpuCtx = document.getElementById('cpuHistoryChart');
+  const memCtx = document.getElementById('memHistoryChart');
+  if (!cpuCtx || !memCtx) return;
+
+  // Pre-fill history lists with empty values
+  for (let i = 0; i < 15; i++) {
+    chartLabels.push('');
+    cpuData.push(0);
+    memData.push(0);
+  }
+
+  // CPU history
+  cpuChart = new Chart(cpuCtx.getContext('2d'), {
+    type: 'line',
+    data: {
+      labels: chartLabels,
+      datasets: [{
+        label: 'CPU Usage (%)',
+        data: cpuData,
+        borderColor: '#2563eb', // --color-accent
+        borderWidth: 2,
+        pointRadius: 0,
+        pointHoverRadius: 4,
+        fill: true,
+        backgroundColor: 'rgba(37, 99, 235, 0.06)',
+        tension: 0.3
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: { legend: { display: false } },
+      scales: {
+        x: { display: false },
+        y: {
+          min: 0,
+          max: 100,
+          ticks: { color: '#64748b', font: { size: 9, family: 'monospace' } },
+          grid: { color: 'rgba(100, 116, 139, 0.08)' }
+        }
+      }
+    }
+  });
+
+  // Memory history
+  memChart = new Chart(memCtx.getContext('2d'), {
+    type: 'line',
+    data: {
+      labels: chartLabels,
+      datasets: [{
+        label: 'Memory Usage (%)',
+        data: memData,
+        borderColor: '#8b5cf6', // Purple/Indigo
+        borderWidth: 2,
+        pointRadius: 0,
+        pointHoverRadius: 4,
+        fill: true,
+        backgroundColor: 'rgba(139, 92, 246, 0.06)',
+        tension: 0.3
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: { legend: { display: false } },
+      scales: {
+        x: { display: false },
+        y: {
+          min: 0,
+          max: 100,
+          ticks: { color: '#64748b', font: { size: 9, family: 'monospace' } },
+          grid: { color: 'rgba(100, 116, 139, 0.08)' }
+        }
+      }
+    }
+  });
+}
+
+/* ==========================================================================
    Live Logs WebSocket Stream
    ========================================================================== */
 
@@ -602,14 +695,27 @@ function renderStatsUI(data) {
     }
   }
 
+  const nowStr = new Date().toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false });
+
   if (data.status === 'running') {
     detailsCpuVal.textContent = `${data.cpu_percent}%`;
-    detailsCpuBar.style.width = `${Math.min(data.cpu_percent, 100)}%`;
-    setBarColor(detailsCpuBar, data.cpu_percent);
-
     detailsMemVal.textContent = `${data.memory_usage_mb}MB / ${data.memory_limit_mb}MB`;
-    detailsMemBar.style.width = `${data.memory_percent}%`;
-    setBarColor(detailsMemBar, data.memory_percent);
+
+    if (cpuChart && memChart) {
+      cpuChart.data.labels.push(nowStr);
+      cpuChart.data.datasets[0].data.push(data.cpu_percent);
+      memChart.data.labels.push(nowStr);
+      memChart.data.datasets[0].data.push(data.memory_percent);
+
+      if (cpuChart.data.labels.length > 15) {
+        cpuChart.data.labels.shift();
+        cpuChart.data.datasets[0].data.shift();
+        memChart.data.labels.shift();
+        memChart.data.datasets[0].data.shift();
+      }
+      cpuChart.update('none');
+      memChart.update('none');
+    }
     
     detailsStatusBadge.className = 'status-badge running';
     detailsStatusText.textContent = 'RUNNING';
@@ -636,9 +742,23 @@ function renderStatsUI(data) {
     } catch (e) {}
   } else {
     detailsCpuVal.textContent = '0%';
-    detailsCpuBar.style.width = '0%';
     detailsMemVal.textContent = '0MB / 0MB';
-    detailsMemBar.style.width = '0%';
+
+    if (cpuChart && memChart) {
+      cpuChart.data.labels.push(nowStr);
+      cpuChart.data.datasets[0].data.push(0);
+      memChart.data.labels.push(nowStr);
+      memChart.data.datasets[0].data.push(0);
+
+      if (cpuChart.data.labels.length > 15) {
+        cpuChart.data.labels.shift();
+        cpuChart.data.datasets[0].data.shift();
+        memChart.data.labels.shift();
+        memChart.data.datasets[0].data.shift();
+      }
+      cpuChart.update('none');
+      memChart.update('none');
+    }
     
     detailsStatusBadge.className = `status-badge ${data.status}`;
     detailsStatusText.textContent = data.status.toUpperCase();
@@ -713,6 +833,179 @@ if (window.realtimeBridge) {
     if (event.type === 'app_updated' && event.data.app_name === appName) {
       console.log("[Details] App updated in realtime:", event.data);
       renderDetails(event.data);
+    }
+  });
+}
+
+/* ==========================================================================
+   Interactive Console Logic
+   ========================================================================== */
+
+let consoleSocket = null;
+let commandHistory = [];
+let historyIndex = -1;
+
+const tabBtnLogs = document.getElementById('tab-btn-logs');
+const tabBtnConsole = document.getElementById('tab-btn-console');
+const panelLogs = document.getElementById('panel-logs');
+const panelConsole = document.getElementById('panel-console');
+const logsActionsGroup = document.getElementById('logs-actions-group');
+
+const consoleForm = document.getElementById('console-form');
+const consoleInput = document.getElementById('console-input');
+const consoleTerminal = document.getElementById('details-console-terminal');
+
+if (tabBtnLogs && tabBtnConsole) {
+  tabBtnLogs.addEventListener('click', () => {
+    tabBtnLogs.classList.add('active');
+    tabBtnConsole.classList.remove('active');
+    
+    panelConsole.style.display = 'none';
+    panelConsole.classList.remove('tab-panel-fade');
+    panelLogs.style.display = 'block';
+    panelLogs.classList.remove('tab-panel-fade');
+    void panelLogs.offsetWidth; // Force DOM reflow to re-trigger animation
+    panelLogs.classList.add('tab-panel-fade');
+    
+    if (logsActionsGroup) logsActionsGroup.style.display = 'flex';
+  });
+
+  tabBtnConsole.addEventListener('click', () => {
+    tabBtnConsole.classList.add('active');
+    tabBtnLogs.classList.remove('active');
+    
+    panelLogs.style.display = 'none';
+    panelLogs.classList.remove('tab-panel-fade');
+    panelConsole.style.display = 'block';
+    panelConsole.classList.remove('tab-panel-fade');
+    void panelConsole.offsetWidth; // Force DOM reflow to re-trigger animation
+    panelConsole.classList.add('tab-panel-fade');
+    
+    if (logsActionsGroup) logsActionsGroup.style.display = 'none';
+    
+    // Connect to interactive console
+    connectConsole();
+  });
+}
+
+function connectConsole() {
+  if (consoleSocket && consoleSocket.readyState === WebSocket.OPEN) {
+    return;
+  }
+
+  const token = localStorage.getItem('mini_heroku_token');
+  const socketUrl = `${WS_BASE}/ws/apps/${appName}/console?token=${encodeURIComponent(token || '')}`;
+  consoleSocket = new WebSocket(socketUrl);
+
+  consoleSocket.onopen = () => {
+    const infoLine = document.createElement('div');
+    infoLine.textContent = '[SYSTEM] Console session established. Direct shell connection online.';
+    infoLine.style.color = '#38bdf8';
+    infoLine.style.fontSize = '0.8rem';
+    consoleTerminal.appendChild(infoLine);
+    consoleTerminal.scrollTop = consoleTerminal.scrollHeight;
+  };
+
+  consoleSocket.onmessage = (event) => {
+    try {
+      const payload = JSON.parse(event.data);
+      if (payload.type === 'output') {
+        const outDiv = document.createElement('span');
+        outDiv.textContent = payload.data;
+        // Keep whitespace/formatting intact
+        outDiv.style.whiteSpace = 'pre-wrap';
+        outDiv.style.wordBreak = 'break-all';
+        consoleTerminal.appendChild(outDiv);
+      } else if (payload.type === 'exit') {
+        const metaLine = document.createElement('div');
+        metaLine.textContent = `[PROCESS EXITED WITH CODE ${payload.code}]`;
+        metaLine.style.color = payload.code === 0 ? '#10b981' : '#ef4444';
+        metaLine.style.fontSize = '0.75rem';
+        metaLine.style.marginTop = '0.25rem';
+        consoleTerminal.appendChild(metaLine);
+      } else if (payload.type === 'status') {
+        // Status can be used for toggling prompt states
+      } else if (payload.type === 'error') {
+        const errDiv = document.createElement('div');
+        errDiv.textContent = `Error: ${payload.message}`;
+        errDiv.style.color = '#ef4444';
+        consoleTerminal.appendChild(errDiv);
+      }
+    } catch (e) {
+      // Fallback
+      const line = document.createElement('div');
+      line.textContent = event.data;
+      consoleTerminal.appendChild(line);
+    }
+    consoleTerminal.scrollTop = consoleTerminal.scrollHeight;
+  };
+
+  consoleSocket.onclose = (event) => {
+    const errDiv = document.createElement('div');
+    if (event.code === 1008) {
+      errDiv.textContent = '[SYSTEM] Connection closed: Session expired or access denied.';
+    } else {
+      errDiv.textContent = '[SYSTEM] Console session closed.';
+    }
+    errDiv.style.color = '#64748b';
+    errDiv.style.fontSize = '0.8rem';
+    consoleTerminal.appendChild(errDiv);
+    consoleTerminal.scrollTop = consoleTerminal.scrollHeight;
+    consoleSocket = null;
+  };
+}
+
+if (consoleForm && consoleInput) {
+  consoleForm.addEventListener('submit', (e) => {
+    e.preventDefault();
+    const cmd = consoleInput.value.trim();
+    if (!cmd) return;
+
+    if (!consoleSocket || consoleSocket.readyState !== WebSocket.OPEN) {
+      const errDiv = document.createElement('div');
+      errDiv.textContent = '[SYSTEM] Cannot execute: Console session is not active. Ensure application is running.';
+      errDiv.style.color = '#ef4444';
+      errDiv.style.fontSize = '0.8rem';
+      consoleTerminal.appendChild(errDiv);
+      consoleTerminal.scrollTop = consoleTerminal.scrollHeight;
+      return;
+    }
+
+    // Print command to terminal
+    const echoLine = document.createElement('div');
+    echoLine.innerHTML = `<span style="color: #38bdf8; font-weight: 700;">vessel@container:~$</span> <span style="color: #ffffff;">${cmd}</span>`;
+    echoLine.style.marginTop = '0.5rem';
+    consoleTerminal.appendChild(echoLine);
+
+    // Send command
+    consoleSocket.send(JSON.stringify({ command: cmd }));
+
+    // Save to history
+    commandHistory.push(cmd);
+    historyIndex = commandHistory.length;
+
+    // Reset input
+    consoleInput.value = '';
+    consoleTerminal.scrollTop = consoleTerminal.scrollHeight;
+  });
+
+  // History scrolling using arrow keys
+  consoleInput.addEventListener('keydown', (e) => {
+    if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      if (commandHistory.length > 0 && historyIndex > 0) {
+        historyIndex--;
+        consoleInput.value = commandHistory[historyIndex];
+      }
+    } else if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      if (historyIndex < commandHistory.length - 1) {
+        historyIndex++;
+        consoleInput.value = commandHistory[historyIndex];
+      } else {
+        historyIndex = commandHistory.length;
+        consoleInput.value = '';
+      }
     }
   });
 }

@@ -299,6 +299,68 @@ document.querySelectorAll('#mem-suggestions .quick-tag').forEach(tag => {
   });
 });
 
+// Quick Templates click handler
+const templates = {
+  node: {
+    name: 'express-welcome-demo',
+    git: 'https://github.com/docker/welcome-to-docker.git',
+    port: '80',
+    autoDetect: true
+  },
+  flask: {
+    name: 'flask-hello-demo',
+    git: 'https://github.com/cpressland/simple-flask-app.git',
+    port: '5000',
+    autoDetect: false
+  },
+  static: {
+    name: 'nginx-static-demo',
+    git: 'https://github.com/lipis/docker-static-website.git',
+    port: '80',
+    autoDetect: true
+  }
+};
+
+document.querySelectorAll('.template-card').forEach(card => {
+  card.addEventListener('click', () => {
+    // Remove active state from other cards
+    document.querySelectorAll('.template-card').forEach(c => {
+      c.style.borderColor = 'var(--color-bg-alt)';
+      c.style.backgroundColor = 'var(--color-bg-cream)';
+      c.style.boxShadow = 'none';
+    });
+    
+    // Add active state to clicked card
+    card.style.borderColor = 'var(--color-accent)';
+    card.style.backgroundColor = 'rgba(37, 99, 235, 0.05)';
+    card.style.boxShadow = '0 0 0 2px rgba(37, 99, 235, 0.15)';
+    
+    const tName = card.getAttribute('data-template');
+    const tData = templates[tName];
+    if (tData) {
+      // Generate randomized 4-char suffix
+      const suffix = Math.floor(1000 + Math.random() * 9000);
+      
+      const appNameInput = document.getElementById('app_name');
+      const gitUrlInput = document.getElementById('git_url');
+      const autoDetectCheckbox = document.getElementById('auto_detect_port');
+      const portInput = document.getElementById('port');
+      
+      if (appNameInput) appNameInput.value = `${tData.name}-${suffix}`;
+      if (gitUrlInput) gitUrlInput.value = tData.git;
+      
+      if (autoDetectCheckbox) {
+        autoDetectCheckbox.checked = tData.autoDetect;
+        // Trigger the change listener
+        autoDetectCheckbox.dispatchEvent(new Event('change'));
+      }
+      if (portInput) {
+        portInput.value = tData.port;
+      }
+    }
+  });
+});
+
 async function fetchSystemInfo() {
   try {
     const res = await authFetch(`${API_BASE}/api/system-info`);

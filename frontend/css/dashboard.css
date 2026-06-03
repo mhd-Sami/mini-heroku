@@ -708,3 +708,26 @@
   color: #ffffff;
   transform: translateY(-1px);
 }
+
+/* Quick Start Template Cards styling */
+.template-card:hover {
+  transform: translateY(-2px);
+  border-color: var(--color-accent) !important;
+  box-shadow: var(--shadow-sm);
+  background-color: var(--color-bg-surface) !important;
+}
+
+/* Interactive Console scrollbars & layout */
+#details-console-terminal::-webkit-scrollbar {
+  width: 6px;
+}
+#details-console-terminal::-webkit-scrollbar-track {
+  background: #1e293b;
+}
+#details-console-terminal::-webkit-scrollbar-thumb {
+  background: #475569;
+  border-radius: var(--radius-sm);
+}
+#details-console-terminal::-webkit-scrollbar-thumb:hover {
+  background: #64748b;
+}

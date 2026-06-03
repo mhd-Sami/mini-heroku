@@ -1386,6 +1386,150 @@ async def websocket_logs(websocket: WebSocket, app_name: str, token: Optional[st
     finally:
         broadcaster.unregister(app_name, q)
 
+@app.websocket("/ws/apps/{app_name}/console")
+async def websocket_console(websocket: WebSocket, app_name: str, token: Optional[str] = None):
+    await websocket.accept()
+
+    if not token:
+        try:
+            await websocket.send_text(json.dumps({"type": "error", "message": "Authentication token missing"}))
+            await websocket.close(code=1008)
+        except Exception:
+            pass
+        return
+
+    uid = None
+    if AUTH_MODE == "local":
+        try:
+            payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+            username: str = payload.get("sub")
+            if username:
+                db = SessionLocal()
+                user = db.query(User).filter(User.username == username).first()
+                if user:
+                    uid = str(user.id)
+                db.close()
+        except jwt.PyJWTError:
+            pass
+    else:
+        try:
+            from auth import verify_supabase_token
+            decoded_token = verify_supabase_token(token)
+            uid = decoded_token.get("sub")
+        except Exception as e:
+            print(f"WS console auth error: {e}", flush=True)
+            pass
+
+    if not uid:
+        try:
+            await websocket.send_text(json.dumps({"type": "error", "message": "Invalid or expired authentication token."}))
+            await websocket.close(code=1008)
+        except Exception:
+            pass
+        return
+
+    db = SessionLocal()
+    try:
+        deployment = db.query(Deployment).filter(Deployment.app_name == app_name).first()
+        if not deployment:
+            await websocket.send_text(json.dumps({"type": "error", "message": "Application not found."}))
+            await websocket.close(code=1008)
+            return
+
+        if deployment.user_id is not None and str(deployment.user_id) != str(uid):
+            await websocket.send_text(json.dumps({"type": "error", "message": "Access denied."}))
+            await websocket.close(code=1008)
+            return
+    except Exception as err:
+        try:
+            await websocket.send_text(json.dumps({"type": "error", "message": f"Server error: {err}"}))
+            await websocket.close(code=1008)
+        except Exception:
+            pass
+        return
+    finally:
+        db.close()
+
+    try:
+        client = get_docker_client()
+    except Exception as docker_err:
+        try:
+            await websocket.send_text(json.dumps({"type": "error", "message": f"Docker host unreachable: {docker_err}"}))
+            await websocket.close()
+        except Exception:
+            pass
+        return
+
+    try:
+        while True:
+            # Receive a command string from client
+            message_text = await websocket.receive_text()
+            try:
+                msg_data = json.loads(message_text)
+                cmd = msg_data.get("command", "").strip()
+            except Exception:
+                cmd = message_text.strip()
+
+            if not cmd:
+                continue
+
+            # Check if container is running
+            try:
+                container = client.containers.get(app_name)
+                if container.status != "running":
+                    await websocket.send_text(json.dumps({"type": "output", "data": "Error: Application container is not running.\r\n"}))
+                    continue
+            except docker.errors.NotFound:
+                await websocket.send_text(json.dumps({"type": "output", "data": "Error: Application container does not exist.\r\n"}))
+                continue
+
+            await websocket.send_text(json.dumps({"type": "status", "data": "running"}))
+
+            # Run the command inside the container using shell
+            try:
+                # Wrap command in shell execution
+                shell_cmd = ["/bin/sh", "-c", cmd]
+                
+                # Create exec instance
+                exec_instance = client.api.exec_create(
+                    container.id, 
+                    shell_cmd, 
+                    stdout=True, 
+                    stderr=True, 
+                    stdin=False, 
+                    tty=True
+                )
+                
+                # Start exec stream
+                output_stream = client.api.exec_start(exec_instance['Id'], stream=True)
+
+                def get_next_chunk(stream_iter):
+                    try:
+                        return next(stream_iter)
+                    except StopIteration:
+                        return None
+
+                stream_iter = iter(output_stream)
+                while True:
+                    chunk = await asyncio.to_thread(get_next_chunk, stream_iter)
+                    if chunk is None:
+                        break
+                    
+                    decoded_chunk = chunk.decode("utf-8", errors="ignore")
+                    await websocket.send_text(json.dumps({"type": "output", "data": decoded_chunk}))
+
+                # Send exit code if possible
+                inspect_info = client.api.exec_inspect(exec_instance['Id'])
+                exit_code = inspect_info.get("ExitCode", 0)
+                await websocket.send_text(json.dumps({"type": "exit", "code": exit_code}))
+
+            except Exception as cmd_err:
+                await websocket.send_text(json.dumps({"type": "output", "data": f"Execution Error: {cmd_err}\r\n"}))
+
+    except Exception:
+        # Connection closed or client disconnected
+        pass
+
 # Mount frontend files (served at app root)
 frontend_path = "/app/frontend"
 if os.path.exists(frontend_path):
