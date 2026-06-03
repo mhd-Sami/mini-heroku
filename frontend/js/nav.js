@@ -1,5 +1,8 @@
 // Authentication check helper running in head before body render to prevent content flash
 (function () {
+  const savedTheme = localStorage.getItem('vessel_color_theme') || 'light';
+  document.documentElement.setAttribute('data-theme', savedTheme);
+
   const token = localStorage.getItem('mini_heroku_token');
   const profileCompleted = localStorage.getItem('mini_heroku_profile_completed');
   const isAuthPage = window.location.pathname.includes('/auth/');
@@ -63,6 +66,187 @@ async function authFetch(url, options = {}) {
     throw new Error('Session expired or unauthorized.');
   }
   return response;
+}
+
+/* ==========================================================================
+   VESSEL CLIENT CACHE & REAL-TIME EVENT BRIDGE
+   ========================================================================== */
+
+const AppCache = {
+  get(key) {
+    try {
+      const data = localStorage.getItem(key);
+      return data ? JSON.parse(data) : null;
+    } catch (e) {
+      return null;
+    }
+  },
+  set(key, val) {
+    try {
+      localStorage.setItem(key, JSON.stringify(val));
+    } catch (e) {}
+  },
+  remove(key) {
+    localStorage.removeItem(key);
+  }
+};
+
+async function swrFetch(url, cacheKey, onUpdate, options = {}) {
+  // 1. Instantly return cached copy to DOM
+  const cachedData = AppCache.get(cacheKey);
+  if (cachedData !== null) {
+    onUpdate(cachedData, true);
+  }
+
+  // 2. Fetch fresh data in the background
+  try {
+    const res = await authFetch(url, options);
+    if (res.ok) {
+      const freshData = await res.json();
+      const cachedStr = JSON.stringify(cachedData);
+      const freshStr = JSON.stringify(freshData);
+      if (cachedStr !== freshStr) {
+        AppCache.set(cacheKey, freshData);
+        onUpdate(freshData, false);
+      }
+    }
+  } catch (err) {
+    console.error(`SWR background fetch failed for ${url}:`, err);
+  }
+}
+
+// Real-time Event Pub/Sub Bridge
+window.realtimeBridge = {
+  listeners: [],
+  subscribe(callback) {
+    this.listeners.push(callback);
+    return () => {
+      this.listeners = this.listeners.filter(cb => cb !== callback);
+    };
+  },
+  broadcast(event) {
+    this.listeners.forEach(cb => {
+      try {
+        cb(event);
+      } catch (e) {
+        console.error("Error in realtime listener:", e);
+      }
+    });
+  }
+};
+
+function connectRealtimeWS() {
+  const token = localStorage.getItem('mini_heroku_token');
+  if (!token) return;
+
+  const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+  const wsHost = window.location.host;
+  const socketUrl = `${wsProtocol === 'wss:' ? 'wss:' : 'ws:'}//${wsHost}/ws/events?token=${encodeURIComponent(token)}`;
+  
+  const ws = new WebSocket(socketUrl);
+  
+  ws.onmessage = (event) => {
+    try {
+      const payload = JSON.parse(event.data);
+      console.log("[Realtime WS] Received event:", payload);
+      
+      // Update local storage cache in-place
+      handleRealtimeEvent(payload);
+      
+      // Broadcast to page listeners
+      window.realtimeBridge.broadcast(payload);
+    } catch (e) {
+      console.error("[Realtime WS] Error parsing message:", e);
+    }
+  };
+  
+  ws.onclose = () => {
+    console.log("[Realtime WS] Disconnected. Reconnecting in 3 seconds...");
+    setTimeout(connectRealtimeWS, 3000);
+  };
+  
+  ws.onerror = (err) => {
+    console.error("[Realtime WS] Socket error:", err);
+  };
+}
+
+function handleRealtimeEvent(payload) {
+  const { type, data } = payload;
+  if (type === 'app_updated') {
+    try {
+      const cached = localStorage.getItem('mini_heroku_deployments_cache');
+      let deployments = cached ? JSON.parse(cached) : [];
+      if (!Array.isArray(deployments)) deployments = [];
+      const idx = deployments.findIndex(d => d.app_name === data.app_name);
+      if (idx !== -1) {
+        deployments[idx] = data;
+      } else {
+        deployments.push(data);
+      }
+      localStorage.setItem('mini_heroku_deployments_cache', JSON.stringify(deployments));
+      
+      // Also update stats cache if status changed to non-running
+      if (data.status !== 'running') {
+        const statsCached = localStorage.getItem('mini_heroku_stats_cache');
+        if (statsCached) {
+          const stats = JSON.parse(statsCached);
+          delete stats[data.app_name];
+          localStorage.setItem('mini_heroku_stats_cache', JSON.stringify(stats));
+        }
+      }
+    } catch (e) {
+      console.error("Failed to update cache on app_updated:", e);
+    }
+  } else if (type === 'app_deleted') {
+    try {
+      const cached = localStorage.getItem('mini_heroku_deployments_cache');
+      let deployments = cached ? JSON.parse(cached) : [];
+      if (Array.isArray(deployments)) {
+        deployments = deployments.filter(d => d.app_name !== data.app_name);
+        localStorage.setItem('mini_heroku_deployments_cache', JSON.stringify(deployments));
+      }
+      
+      // Remove from stats cache
+      const statsCached = localStorage.getItem('mini_heroku_stats_cache');
+      if (statsCached) {
+        const stats = JSON.parse(statsCached);
+        delete stats[data.app_name];
+        localStorage.setItem('mini_heroku_stats_cache', JSON.stringify(stats));
+      }
+    } catch (e) {
+      console.error("Failed to update cache on app_deleted:", e);
+    }
+  } else if (type === 'history_added') {
+    try {
+      const cached = localStorage.getItem('mini_heroku_history_cache');
+      let history = cached ? JSON.parse(cached) : [];
+      if (!Array.isArray(history)) history = [];
+      if (!history.some(h => h.id === data.id)) {
+        history.unshift(data);
+        localStorage.setItem('mini_heroku_history_cache', JSON.stringify(history));
+      }
+    } catch (e) {
+      console.error("Failed to update history cache on history_added:", e);
+    }
+  } else if (type === 'history_deleted') {
+    try {
+      const cached = localStorage.getItem('mini_heroku_history_cache');
+      let history = cached ? JSON.parse(cached) : [];
+      if (Array.isArray(history)) {
+        history = history.filter(h => h.id !== data.id);
+        localStorage.setItem('mini_heroku_history_cache', JSON.stringify(history));
+      }
+    } catch (e) {
+      console.error("Failed to update history cache on history_deleted:", e);
+    }
+  } else if (type === 'history_cleared') {
+    localStorage.setItem('mini_heroku_history_cache', JSON.stringify([]));
+  }
+}
+
+// Auto-start connection on page load if user token exists
+if (localStorage.getItem('mini_heroku_token')) {
+  setTimeout(connectRealtimeWS, 100);
 }
 
 

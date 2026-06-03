@@ -113,8 +113,8 @@
   flex-direction: column;
   justify-content: space-between;
   padding: 3rem;
-  background-color: #f8fafc;
-  background-image: radial-gradient(#cbd5e1 1.2px, transparent 1.2px);
+  background-color: var(--color-auth-promo-bg);
+  background-image: radial-gradient(var(--color-auth-promo-dots) 1.2px, transparent 1.2px);
   background-size: 24px 24px;
   border-right: 1px solid var(--color-bg-alt);
   position: relative;
@@ -254,7 +254,7 @@
 }
 
 .stat-bubble {
-  background-color: #ffffff;
+  background-color: var(--color-bg-surface);
   border: 1px solid var(--color-bg-alt);
   border-radius: var(--radius-md);
   padding: 1.25rem;
@@ -370,7 +370,7 @@
   align-items: center;
   justify-content: center;
   padding: 2rem;
-  background-color: #ffffff;
+  background-color: var(--color-auth-form-bg);
   position: relative;
   z-index: 2;
   height: 100vh;
@@ -388,7 +388,7 @@
 
 /* Glassmorphic Auth Card */
 .auth-card {
-  background: rgba(255, 255, 255, 0.85);
+  background: var(--color-auth-card-bg);
   backdrop-filter: blur(24px);
   -webkit-backdrop-filter: blur(24px);
   border-radius: var(--radius-lg);
@@ -427,8 +427,8 @@
 /* Tab Switcher */
 .auth-tabs {
   display: flex;
-  background-color: rgba(226, 232, 240, 0.6);
-  border: 1px solid rgba(226, 232, 240, 0.8);
+  background-color: var(--color-auth-tabs-bg);
+  border: 1px solid var(--color-auth-tabs-border);
   padding: 0.25rem;
   border-radius: var(--radius-sm);
   gap: 0.25rem;
@@ -497,8 +497,8 @@
 
 .auth-form input:focus {
   outline: none;
-  border-color: var(--color-primary-light);
-  box-shadow: 0 0 0 4px rgba(37, 41, 43, 0.12);
+  border-color: var(--color-accent);
+  box-shadow: 0 0 0 4px var(--color-accent-soft);
 }
 
 .auth-form .input-hint {
@@ -510,7 +510,7 @@
 /* Buttons */
 .auth-form .btn-primary {
   height: 2.85rem;
-  background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary-light) 100%);
+  background: var(--color-auth-btn-bg);
   color: var(--color-text-light);
   border-radius: var(--radius-sm);
   font-weight: 600;
@@ -528,7 +528,7 @@
 .auth-form .btn-primary:hover {
   transform: translateY(-1px);
   box-shadow: 0 6px 16px rgba(37, 41, 43, 0.35);
-  background: linear-gradient(135deg, var(--color-primary-hover) 0%, var(--color-primary) 100%);
+  background: var(--color-auth-btn-hover-bg);
 }
 
 .auth-form .btn-primary:active {
@@ -615,13 +615,13 @@
 .utility-link {
   font-size: 0.85rem;
   font-weight: 500;
-  color: var(--color-primary);
+  color: var(--color-accent);
   text-decoration: none;
   transition: color var(--transition-fast);
 }
 
 .utility-link:hover {
-  color: var(--color-primary-hover);
+  color: var(--color-accent-hover);
   text-decoration: underline;
 }
 

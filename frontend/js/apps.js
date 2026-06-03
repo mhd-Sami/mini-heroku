@@ -40,11 +40,7 @@ const btnClearHistory = document.getElementById('btn-clear-history');
 const historyTableWrapper = document.getElementById('history-table-wrapper');
 
 async function fetchDeployments() {
-  try {
-    const res = await authFetch(`${API_BASE}/api/apps`);
-    if (!res.ok) throw new Error('Failed to load deployments');
-    const nextDeployments = await res.json();
-
+  swrFetch(`${API_BASE}/api/apps`, 'mini_heroku_deployments_cache', (nextDeployments) => {
     // Check for auto-deploy transitions
     if (deployments && deployments.length > 0) {
       nextDeployments.forEach(newApp => {
@@ -58,19 +54,12 @@ async function fetchDeployments() {
     }
 
     deployments = nextDeployments;
-    localStorage.setItem('mini_heroku_deployments_cache', JSON.stringify(deployments));
     if (window.refreshNavBadge) {
       window.refreshNavBadge();
     }
     renderDashboard();
     updateTelemetryBar();
-  } catch (err) {
-    console.error('Error fetching deployments:', err);
-    if (loadingState) loadingState.classList.add('hidden');
-    if (deployments.length === 0) {
-      emptyState.classList.remove('hidden');
-    }
-  }
+  });
 }
 
 function renderDashboard() {
@@ -527,21 +516,36 @@ if (btnModalCopy) {
 
 // Initial load
 function loadCachedDeployments() {
-  const cached = localStorage.getItem('mini_heroku_deployments_cache');
+  const cached = AppCache.get('mini_heroku_deployments_cache');
   if (cached) {
-    try {
-      deployments = JSON.parse(cached);
-      if (deployments && deployments.length > 0) {
-        renderDashboard();
-      }
-    } catch (e) {
-      console.error("Failed to parse cached deployments:", e);
+    deployments = cached;
+    if (deployments && deployments.length > 0) {
+      renderDashboard();
+      updateTelemetryBar();
     }
   }
 }
 loadCachedDeployments();
 fetchDeployments();
-setInterval(fetchDeployments, 5000); // Poll deployments list every 5 seconds to detect auto-deployments
+setInterval(fetchDeployments, 30000); // Poll deployments list every 30 seconds as fallback
+
+// Listen to realtime event updates
+if (window.realtimeBridge) {
+  window.realtimeBridge.subscribe((event) => {
+    console.log("[Apps] Realtime event trigger:", event);
+    deployments = AppCache.get('mini_heroku_deployments_cache') || [];
+    if (window.refreshNavBadge) {
+      window.refreshNavBadge();
+    }
+    if (activeTab === 'active') {
+      renderDashboard();
+      updateTelemetryBar();
+    } else {
+      const history = AppCache.get('mini_heroku_history_cache') || [];
+      renderHistory(history);
+    }
+  });
+}
 
 // Parse query params to launch logs modal if a deployment is in progress
 function checkDeployingParam() {
@@ -635,17 +639,9 @@ setupFilters();
    ========================================================================== */
 
 async function loadHistory() {
-  try {
-    const res = await authFetch(`${API_BASE}/api/deployments/history`);
-    if (!res.ok) throw new Error('Failed to load deployment history');
-    const history = await res.json();
+  swrFetch(`${API_BASE}/api/deployments/history`, 'mini_heroku_history_cache', (history) => {
     renderHistory(history);
-  } catch (err) {
-    console.error('Error fetching deployment history:', err);
-    if (historyTableWrapper) historyTableWrapper.classList.add('hidden');
-    if (btnClearHistory) btnClearHistory.style.display = 'none';
-    if (historyEmptyState) historyEmptyState.classList.remove('hidden');
-  }
+  });
 }
 
 function renderHistory(history) {

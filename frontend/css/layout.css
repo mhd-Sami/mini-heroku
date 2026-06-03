@@ -4,15 +4,15 @@
 
 /* App Header styling - Floating Glassmorphic Pill Header */
 .app-header {
-  background-color: rgba(255, 255, 255, 0.68);
+  background-color: var(--color-header-bg);
   backdrop-filter: blur(30px);
   -webkit-backdrop-filter: blur(30px);
-  border: 1px solid rgba(255, 255, 255, 0.45);
+  border: 1px solid var(--color-header-border);
   padding: 0.65rem 1.75rem;
   position: sticky;
   top: 1rem;
   z-index: 100;
-  box-shadow: 0 20px 40px rgba(15, 23, 42, 0.06), 0 1px 3px rgba(15, 23, 42, 0.01), inset 0 1px 0 rgba(255, 255, 255, 0.6);
+  box-shadow: var(--shadow-premium);
   max-width: 1400px;
   width: calc(100% - 3rem);
   margin: 1rem auto 0 auto;
@@ -72,10 +72,10 @@
   display: flex;
   gap: 0.35rem;
   align-items: center;
-  background: rgba(15, 23, 42, 0.03);
+  background: var(--color-nav-bg);
   padding: 0.25rem;
   border-radius: var(--radius-md);
-  border: 1px solid rgba(15, 23, 42, 0.04);
+  border: 1px solid var(--color-nav-border);
 }
 
 .nav-link {
@@ -93,7 +93,7 @@
 
 .nav-link:hover {
   color: var(--color-text-main);
-  background-color: rgba(15, 23, 42, 0.04);
+  background-color: var(--color-nav-hover-bg);
   text-decoration: none;
 }
 
@@ -105,7 +105,7 @@
 .nav-link.active {
   color: var(--color-accent);
   background-color: var(--color-bg-surface);
-  border-color: rgba(15, 23, 42, 0.06);
+  border-color: var(--color-nav-active-border);
   box-shadow: var(--shadow-sm);
   text-decoration: none;
 }
@@ -182,7 +182,7 @@
   display: flex;
   align-items: center;
   gap: 0.75rem;
-  border-left: 1px solid rgba(15, 23, 42, 0.08);
+  border-left: 1px solid var(--color-bg-alt);
   padding-left: 1rem;
 }
 
@@ -237,7 +237,7 @@
 
 /* App Footer styling */
 .app-footer {
-  background-color: rgba(255, 255, 255, 0.4);
+  background-color: var(--color-footer-bg);
   border-top: 1px solid var(--color-bg-alt);
   padding: 1.5rem 0;
   margin-top: auto;

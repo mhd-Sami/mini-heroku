@@ -1,6 +1,6 @@
 import os
 from datetime import datetime
-from sqlalchemy import create_engine, Column, Integer, String, Float, Text, DateTime, ForeignKey, text, inspect, Boolean
+from sqlalchemy import create_engine, Column, Integer, String, Float, Text, DateTime, ForeignKey, text, inspect, Boolean, Index
 from sqlalchemy.orm import declarative_base, sessionmaker, relationship
 
 from urllib.parse import quote_plus, unquote
@@ -79,10 +79,14 @@ class Deployment(Base):
     env_vars = Column(Text, nullable=True)       # Serialized JSON string of environmental variables
     container_id = Column(String, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
-    user_id = Column(String, nullable=True)
+    user_id = Column(String, nullable=True, index=True)
     auto_deploy = Column(Boolean, default=False)
     last_commit_hash = Column(String, nullable=True)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    __table_args__ = (
+        Index('idx_deployments_auto_deploy_status', 'auto_deploy', 'status'),
+    )
 
 class DeploymentHistory(Base):
     __tablename__ = "deployment_history"
@@ -94,6 +98,10 @@ class DeploymentHistory(Base):
     status = Column(String, nullable=False)  # success, failed
     last_commit_hash = Column(String, nullable=True)
     deployed_at = Column(DateTime, default=datetime.utcnow)
+
+    __table_args__ = (
+        Index('idx_history_user_deployed', 'user_id', 'deployed_at'),
+    )
 
 def init_db():
     Base.metadata.create_all(bind=engine)

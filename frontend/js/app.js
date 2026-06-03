@@ -30,6 +30,21 @@ function addEnvRow(key = '', val = '') {
 
 btnAddEnv.addEventListener('click', () => addEnvRow());
 
+// Auto detect port checkbox toggle
+const autoDetectPortCheckbox = document.getElementById('auto_detect_port');
+const portInput = document.getElementById('port');
+if (autoDetectPortCheckbox && portInput) {
+  autoDetectPortCheckbox.addEventListener('change', () => {
+    if (autoDetectPortCheckbox.checked) {
+      portInput.disabled = true;
+      portInput.style.opacity = '0.6';
+    } else {
+      portInput.disabled = false;
+      portInput.style.opacity = '1';
+    }
+  });
+}
+
 function getEnvVariables() {
   const envVars = {};
   const rows = envList.querySelectorAll('.env-row');
@@ -48,33 +63,19 @@ function getEnvVariables() {
    ========================================================================== */
 
 async function fetchMetrics() {
-  try {
-    const res = await authFetch(`${API_BASE}/api/apps`);
-    if (!res.ok) throw new Error('Failed to load apps');
-    const deployments = await res.json();
-    
-    // Fetch deployment history for real-time activity timeline
-    let history = [];
-    try {
-      const histRes = await authFetch(`${API_BASE}/api/deployments/history`);
-      if (histRes.ok) {
-        history = await histRes.json();
-      }
-    } catch (e) {
-      console.error("Failed to load history in dashboard metrics:", e);
-    }
-    
-    localStorage.setItem('mini_heroku_deployments_cache', JSON.stringify(deployments));
-    if (history.length > 0) {
-      localStorage.setItem('mini_heroku_history_cache', JSON.stringify(history));
-    }
-    
+  // SWR fetch for deployments list
+  swrFetch(`${API_BASE}/api/apps`, 'mini_heroku_deployments_cache', (deployments) => {
     updateMetricsUI(deployments);
     renderActiveServicesSummary(deployments);
+    const history = AppCache.get('mini_heroku_history_cache') || [];
     generateActivityTimeline(deployments, history);
-  } catch (err) {
-    console.error('Error fetching metrics:', err);
-  }
+  });
+
+  // SWR fetch for history logs
+  swrFetch(`${API_BASE}/api/deployments/history`, 'mini_heroku_history_cache', (history) => {
+    const deployments = AppCache.get('mini_heroku_deployments_cache') || [];
+    generateActivityTimeline(deployments, history);
+  });
 }
 
 function updateMetricsUI(deployments) {
@@ -205,7 +206,10 @@ if (deployForm) {
 
     const app_name = document.getElementById('app_name').value.trim().toLowerCase();
     const git_url = document.getElementById('git_url').value.trim();
-    const port = parseInt(document.getElementById('port').value, 10);
+    
+    const isAutoDetect = document.getElementById('auto_detect_port') && document.getElementById('auto_detect_port').checked;
+    const port = isAutoDetect ? 0 : parseInt(document.getElementById('port').value, 10);
+    
     const cpu_limit = document.getElementById('cpu_limit').value;
     const memory_limit = document.getElementById('memory_limit').value.trim();
     const env_vars = getEnvVariables();
@@ -251,22 +255,35 @@ if (deployForm) {
 
 // Load metrics on start
 function loadCachedMetrics() {
-  const cached = localStorage.getItem('mini_heroku_deployments_cache');
-  if (cached) {
-    try {
-      const deployments = JSON.parse(cached);
-      if (deployments) {
-        updateMetricsUI(deployments);
-        renderActiveServicesSummary(deployments);
-      }
-    } catch (e) {
-      console.error("Failed to parse cached metrics:", e);
-    }
+  const cached = AppCache.get('mini_heroku_deployments_cache');
+  const cachedHistory = AppCache.get('mini_heroku_history_cache');
+  const deployments = cached || [];
+  const history = cachedHistory || [];
+  
+  if (deployments.length > 0) {
+    updateMetricsUI(deployments);
+    renderActiveServicesSummary(deployments);
+  }
+  if (deployments.length > 0 || history.length > 0) {
+    generateActivityTimeline(deployments, history);
   }
 }
 loadCachedMetrics();
 fetchMetrics();
 checkActionParam();
+
+// Listen to realtime bridge updates
+if (window.realtimeBridge) {
+  window.realtimeBridge.subscribe((event) => {
+    console.log("[Dashboard] Realtime event trigger:", event);
+    const deployments = AppCache.get('mini_heroku_deployments_cache') || [];
+    const history = AppCache.get('mini_heroku_history_cache') || [];
+    
+    updateMetricsUI(deployments);
+    renderActiveServicesSummary(deployments);
+    generateActivityTimeline(deployments, history);
+  });
+}
 
 // Quick Fill Suggestions for resource allocation parameters
 document.querySelectorAll('#cpu-suggestions .quick-tag').forEach(tag => {
@@ -414,5 +431,5 @@ function formatTimelineTime(date) {
 // Initial System Queries
 fetchSystemInfo();
 
-// Set dashboard updates to loop in real-time every 5 seconds
-setInterval(fetchMetrics, 5000);
+// Polling fallback to keep data fresh (every 30 seconds instead of every 5 seconds)
+setInterval(fetchMetrics, 30000);

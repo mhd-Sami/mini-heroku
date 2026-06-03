@@ -97,6 +97,73 @@ class LogBroadcaster:
 
 broadcaster = LogBroadcaster()
 
+class EventBroadcaster:
+    def __init__(self):
+        # user_id -> set of WebSockets
+        self.connections: Dict[str, set[WebSocket]] = {}
+
+    async def connect(self, user_id: str, websocket: WebSocket):
+        if user_id not in self.connections:
+            self.connections[user_id] = set()
+        self.connections[user_id].add(websocket)
+
+    def disconnect(self, user_id: str, websocket: WebSocket):
+        if user_id in self.connections:
+            self.connections[user_id].discard(websocket)
+            if not self.connections[user_id]:
+                del self.connections[user_id]
+
+    async def broadcast_to_user(self, user_id: str, event_type: str, data: dict):
+        if user_id in self.connections:
+            payload = {"type": event_type, "data": data}
+            message = json.dumps(payload)
+            active_connections = list(self.connections[user_id])
+            for connection in active_connections:
+                try:
+                    await connection.send_text(message)
+                except Exception:
+                    self.connections[user_id].discard(connection)
+
+event_broadcaster = EventBroadcaster()
+
+def send_realtime_event(user_id: str, event_type: str, data: dict):
+    if not user_id:
+        return
+    try:
+        loop = asyncio.get_running_loop()
+    except RuntimeError:
+        loop = None
+        
+    if loop and loop.is_running():
+        loop.create_task(event_broadcaster.broadcast_to_user(str(user_id), event_type, data))
+    else:
+        try:
+            main_loop = asyncio.get_event_loop()
+            if main_loop.is_running():
+                asyncio.run_coroutine_threadsafe(
+                    event_broadcaster.broadcast_to_user(str(user_id), event_type, data), 
+                    main_loop
+                )
+        except Exception as e:
+            print(f"Error sending real-time event: {e}", flush=True)
+
+def serialize_deployment(d: Deployment) -> dict:
+    return {
+        "id": d.id,
+        "app_name": d.app_name,
+        "git_url": d.git_url,
+        "local_domain": d.local_domain,
+        "port": d.port,
+        "status": d.status,
+        "cpu_limit": d.cpu_limit,
+        "memory_limit": d.memory_limit,
+        "env_vars": json.loads(d.env_vars) if d.env_vars else {},
+        "auto_deploy": d.auto_deploy,
+        "last_commit_hash": d.last_commit_hash,
+        "updated_at": d.updated_at.isoformat() if d.updated_at else (d.created_at.isoformat() if d.created_at else None),
+        "created_at": d.created_at.isoformat() if d.created_at else None
+    }
+
 def log_message(app_name: str, message: str):
     if app_name not in build_logs:
         build_logs[app_name] = []
@@ -212,8 +279,39 @@ def deploy_app_task(
         except docker.errors.NotFound:
             pass
 
+        # Auto-detect port if port is 0
+        final_port = port
+        if port == 0:
+            try:
+                log_message(app_name, "Auto-detecting port from built Docker image...")
+                image = client.images.get(app_name)
+                exposed_ports = image.attrs.get('Config', {}).get('ExposedPorts', {})
+                if exposed_ports:
+                    ports = [int(p.split('/')[0]) for p in exposed_ports.keys()]
+                    # Preferred application ports in order of priority
+                    preferred = [8080, 8000, 5000, 3000, 8081, 4000, 80]
+                    detected_port = None
+                    for p in preferred:
+                        if p in ports:
+                            detected_port = p
+                            break
+                    if detected_port is None:
+                        # Exclude standard admin/db ports
+                        excluded = {2019, 443, 3306, 5432, 27017, 6379}
+                        remaining = [p for p in ports if p not in excluded]
+                        detected_port = remaining[0] if remaining else ports[0]
+                        
+                    log_message(app_name, f"Successfully auto-detected port: {detected_port}")
+                    final_port = detected_port
+                else:
+                    log_message(app_name, "No EXPOSE ports found in Dockerfile. Falling back to default port 80.")
+                    final_port = 80
+            except Exception as pe:
+                log_message(app_name, f"Port auto-detection failed: {pe}. Falling back to default port 80.")
+                final_port = 80
+
         # 5. Launch Container with Traefik tags
-        log_message(app_name, "Docker build completed. Launching container...")
+        log_message(app_name, f"Launching container on port {final_port}...")
 
         # Traefik router/service identifiers in label keys must be strictly alphanumeric
         route_name = re.sub(r'[^a-zA-Z0-9]', '', app_name)
@@ -223,7 +321,7 @@ def deploy_app_task(
             "traefik.docker.network": "mini-heroku-net",
             f"traefik.http.routers.{route_name}.rule": f'Host("{app_name}.localhost")',
             f"traefik.http.routers.{route_name}.entrypoints": "web",
-            f"traefik.http.services.{route_name}.loadbalancer.server.port": str(port)
+            f"traefik.http.services.{route_name}.loadbalancer.server.port": str(final_port)
         }
 
         # Convert float CPU to nano_cpus
@@ -246,6 +344,7 @@ def deploy_app_task(
 
         deployment.status = "running"
         deployment.container_id = container.id
+        deployment.port = final_port
         deployment.updated_at = datetime.utcnow()
 
         # Get commit hash of what was built
@@ -265,6 +364,7 @@ def deploy_app_task(
             log_message(app_name, f"Warning: Could not fetch build commit hash: {hash_err}")
 
         db.commit()
+        send_realtime_event(deployment.user_id, "app_updated", serialize_deployment(deployment))
 
         # Save history if enabled
         if deployment.user_id:
@@ -280,6 +380,15 @@ def deploy_app_task(
                     )
                     db.add(history_entry)
                     db.commit()
+                    hist_data = {
+                        "id": history_entry.id,
+                        "app_name": history_entry.app_name,
+                        "git_url": history_entry.git_url,
+                        "status": history_entry.status,
+                        "last_commit_hash": history_entry.last_commit_hash,
+                        "deployed_at": history_entry.deployed_at.isoformat()
+                    }
+                    send_realtime_event(deployment.user_id, "history_added", hist_data)
             except Exception as hist_err:
                 print(f"Error logging success deployment history: {hist_err}", flush=True)
 
@@ -288,6 +397,7 @@ def deploy_app_task(
         deployment.status = "failed"
         deployment.updated_at = datetime.utcnow()
         db.commit()
+        send_realtime_event(deployment.user_id, "app_updated", serialize_deployment(deployment))
 
         # Save history if enabled
         if deployment.user_id:
@@ -303,6 +413,15 @@ def deploy_app_task(
                     )
                     db.add(history_entry)
                     db.commit()
+                    hist_data = {
+                        "id": history_entry.id,
+                        "app_name": history_entry.app_name,
+                        "git_url": history_entry.git_url,
+                        "status": history_entry.status,
+                        "last_commit_hash": history_entry.last_commit_hash,
+                        "deployed_at": history_entry.deployed_at.isoformat()
+                    }
+                    send_realtime_event(deployment.user_id, "history_added", hist_data)
             except Exception as hist_err:
                 print(f"Error logging failed deployment history: {hist_err}", flush=True)
     finally:
@@ -336,6 +455,14 @@ class DeployRequest(BaseModel):
     memory_limit: Optional[str] = None
     env_vars: Optional[Dict[str, str]] = None
     auto_deploy: Optional[bool] = False
+
+class ConfigureAppRequest(BaseModel):
+    git_url: Optional[str] = None
+    port: Optional[int] = None
+    cpu_limit: Optional[float] = None
+    memory_limit: Optional[str] = None
+    env_vars: Optional[Dict[str, str]] = None
+    auto_deploy: Optional[bool] = None
 
 @app.on_event("startup")
 def startup_event():
@@ -457,6 +584,7 @@ async def auto_deploy_poller():
                     app.status = "building"
                     app.last_commit_hash = latest_hash
                     db.commit()
+                    send_realtime_event(app.user_id, "app_updated", serialize_deployment(app))
                     
                     loop = asyncio.get_event_loop()
                     loop.run_in_executor(
@@ -624,6 +752,11 @@ def deploy_app(
         env_vars_dict=request.env_vars or {}
     )
 
+    # Send building status update
+    d_rec = db.query(Deployment).filter(Deployment.id == db_id).first()
+    if d_rec:
+        send_realtime_event(current_uid, "app_updated", serialize_deployment(d_rec))
+
     return {
         "status": "success",
         "message": f"Deployment and build started for '{app_name}'",
@@ -652,6 +785,7 @@ def start_app(app_name: str, db: Session = Depends(get_db), current_uid: str = D
         deployment.status = "running"
         db.commit()
         log_message(app_name, "Application container started manually.")
+        send_realtime_event(deployment.user_id, "app_updated", serialize_deployment(deployment))
         return {"status": "success", "message": f"App {app_name} started"}
     except docker.errors.NotFound:
         raise HTTPException(status_code=400, detail="Container not found. Please trigger deployment again.")
@@ -678,10 +812,12 @@ def stop_app(app_name: str, db: Session = Depends(get_db), current_uid: str = De
         deployment.status = "stopped"
         db.commit()
         log_message(app_name, "Application container stopped manually.")
+        send_realtime_event(deployment.user_id, "app_updated", serialize_deployment(deployment))
         return {"status": "success", "message": f"App {app_name} stopped"}
     except docker.errors.NotFound:
         deployment.status = "stopped"
         db.commit()
+        send_realtime_event(deployment.user_id, "app_updated", serialize_deployment(deployment))
         return {"status": "success", "message": f"Container not found, marked as stopped"}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -707,6 +843,7 @@ def restart_app(app_name: str, db: Session = Depends(get_db), current_uid: str =
         deployment.status = "running"
         db.commit()
         log_message(app_name, "Application container restarted manually.")
+        send_realtime_event(deployment.user_id, "app_updated", serialize_deployment(deployment))
         return {"status": "success", "message": f"App {app_name} restarted"}
     except docker.errors.NotFound:
         raise HTTPException(status_code=400, detail="Container not found. Please trigger deployment again.")
@@ -746,6 +883,7 @@ def delete_app(app_name: str, db: Session = Depends(get_db), current_uid: str = 
         if app_name in build_logs:
             del build_logs[app_name]
             
+        send_realtime_event(current_uid, "app_deleted", {"app_name": app_name})
         return {"status": "success", "message": f"App {app_name} deleted successfully"}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -778,6 +916,122 @@ def toggle_auto_deploy(
             
     db.commit()
     return {"status": "success", "auto_deploy": deployment.auto_deploy}
+
+@app.post("/api/apps/{app_name}/configure")
+def configure_app(
+    app_name: str,
+    request: ConfigureAppRequest,
+    db: Session = Depends(get_db),
+    current_uid: str = Depends(get_current_user)
+):
+    deployment = db.query(Deployment).filter(Deployment.app_name == app_name).first()
+    if not deployment:
+        raise HTTPException(status_code=404, detail="App not found")
+    if deployment.user_id is not None and str(deployment.user_id) != str(current_uid):
+        raise HTTPException(status_code=403, detail="Permission denied")
+
+    if deployment.user_id is None:
+        deployment.user_id = current_uid
+        db.commit()
+
+    # Update database values
+    if request.git_url is not None:
+        deployment.git_url = request.git_url
+    if request.port is not None:
+        deployment.port = request.port
+    if request.cpu_limit is not None:
+        deployment.cpu_limit = request.cpu_limit
+    if request.memory_limit is not None:
+        deployment.memory_limit = request.memory_limit
+    if request.env_vars is not None:
+        deployment.env_vars = json.dumps(request.env_vars)
+    if request.auto_deploy is not None:
+        deployment.auto_deploy = request.auto_deploy
+
+    deployment.updated_at = datetime.utcnow()
+    db.commit()
+
+    # If the app is currently running, we need to recreate the container to apply changes
+    if deployment.status == "running":
+        try:
+            client = get_docker_client()
+            
+            # Stop and remove old container
+            try:
+                old_container = client.containers.get(app_name)
+                old_container.stop(timeout=5)
+                old_container.remove()
+            except docker.errors.NotFound:
+                pass
+
+            # Launch new container with new settings
+            route_name = re.sub(r'[^a-zA-Z0-9]', '', app_name)
+            labels = {
+                "traefik.enable": "true",
+                "traefik.docker.network": "mini-heroku-net",
+                f"traefik.http.routers.{route_name}.rule": f'Host("{app_name}.localhost")',
+                f"traefik.http.routers.{route_name}.entrypoints": "web",
+                f"traefik.http.services.{route_name}.loadbalancer.server.port": str(deployment.port)
+            }
+            nano_cpus = int(deployment.cpu_limit * 1e9) if deployment.cpu_limit else None
+            env_vars_dict = request.env_vars if request.env_vars is not None else (json.loads(deployment.env_vars) if deployment.env_vars else {})
+
+            container = client.containers.run(
+                image=app_name,
+                name=app_name,
+                detach=True,
+                network="mini-heroku-net",
+                labels=labels,
+                environment=env_vars_dict,
+                nano_cpus=nano_cpus,
+                mem_limit=deployment.memory_limit if deployment.memory_limit else None,
+                restart_policy={"Name": "on-failure"}
+            )
+            deployment.container_id = container.id
+            db.commit()
+            log_message(app_name, "Container recreated to apply updated configuration.")
+        except Exception as e:
+            deployment.status = "failed"
+            db.commit()
+            
+            # Send status update even on failure
+            app_data = {
+                "id": deployment.id,
+                "app_name": deployment.app_name,
+                "git_url": deployment.git_url,
+                "local_domain": deployment.local_domain,
+                "port": deployment.port,
+                "status": deployment.status,
+                "cpu_limit": deployment.cpu_limit,
+                "memory_limit": deployment.memory_limit,
+                "env_vars": json.loads(deployment.env_vars) if deployment.env_vars else {},
+                "auto_deploy": deployment.auto_deploy,
+                "last_commit_hash": deployment.last_commit_hash,
+                "updated_at": deployment.updated_at.isoformat(),
+                "created_at": deployment.created_at.isoformat()
+            }
+            send_realtime_event(deployment.user_id, "app_updated", app_data)
+            raise HTTPException(status_code=500, detail=f"Failed to recreate container: {str(e)}")
+
+    # Send update event
+    app_data = {
+        "id": deployment.id,
+        "app_name": deployment.app_name,
+        "git_url": deployment.git_url,
+        "local_domain": deployment.local_domain,
+        "port": deployment.port,
+        "status": deployment.status,
+        "cpu_limit": deployment.cpu_limit,
+        "memory_limit": deployment.memory_limit,
+        "env_vars": json.loads(deployment.env_vars) if deployment.env_vars else {},
+        "auto_deploy": deployment.auto_deploy,
+        "last_commit_hash": deployment.last_commit_hash,
+        "updated_at": deployment.updated_at.isoformat(),
+        "created_at": deployment.created_at.isoformat()
+    }
+    send_realtime_event(deployment.user_id, "app_updated", app_data)
+
+    return {"status": "success", "message": "App configuration updated successfully", "app": app_data}
 
 @app.get("/api/apps/stats/bulk")
 def get_bulk_app_stats(current_uid: str = Depends(get_current_user)):
@@ -890,7 +1144,39 @@ def get_app_stats(app_name: str, db: Session = Depends(get_db), current_uid: str
                     "memory_percent": 0.0
                 }
                 
-    # Inject database metadata fields for frontend real-time tracking
+    # Fetch container insights from Docker
+    image_size_mb = 0.0
+    ip_address = ""
+    started_at = ""
+    restart_count = 0
+    try:
+        client = get_docker_client()
+        try:
+            image = client.images.get(app_name)
+            image_size_mb = round(image.attrs.get("Size", 0) / (1024 * 1024), 2)
+        except Exception:
+            pass
+        if deployment.status == "running":
+            try:
+                container = client.containers.get(app_name)
+                state = container.attrs.get("State", {})
+                started_at = state.get("StartedAt", "")
+                restart_count = state.get("RestartCount", 0)
+                networks = container.attrs.get("NetworkSettings", {}).get("Networks", {})
+                for net_name, net_info in networks.items():
+                    if net_name == "mini-heroku-net":
+                        ip_address = net_info.get("IPAddress", "")
+                        break
+            except Exception:
+                pass
+    except Exception:
+        pass
+
+    # Inject database metadata and Docker insights
+    res["image_size_mb"] = image_size_mb
+    res["ip_address"] = ip_address
+    res["started_at"] = started_at
+    res["restart_count"] = restart_count
     res["updated_at"] = deployment.updated_at.isoformat() if deployment.updated_at else None
     res["auto_deploy"] = deployment.auto_deploy
     res["last_commit_hash"] = deployment.last_commit_hash
@@ -936,6 +1222,7 @@ def get_deployment_history(db: Session = Depends(get_db), current_uid: str = Dep
 def clear_deployment_history(db: Session = Depends(get_db), current_uid: str = Depends(get_current_user)):
     db.query(DeploymentHistory).filter(DeploymentHistory.user_id == current_uid).delete(synchronize_session=False)
     db.commit()
+    send_realtime_event(current_uid, "history_cleared", {})
     return {"status": "success", "message": "Deployment history cleared successfully"}
 
 @app.delete("/api/deployments/history/{history_id}")
@@ -945,7 +1232,59 @@ def delete_history_item(history_id: int, db: Session = Depends(get_db), current_
         raise HTTPException(status_code=404, detail="History item not found")
     db.delete(item)
     db.commit()
+    send_realtime_event(current_uid, "history_deleted", {"id": history_id})
     return {"status": "success", "message": "History item deleted successfully"}
+
+@app.websocket("/ws/events")
+async def websocket_events(websocket: WebSocket, token: Optional[str] = None):
+    await websocket.accept()
+    if not token:
+        try:
+            await websocket.send_text(json.dumps({"type": "error", "message": "Authentication token missing"}))
+            await websocket.close(code=1008)
+        except Exception:
+            pass
+        return
+
+    uid = None
+    if AUTH_MODE == "local":
+        try:
+            payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+            username: str = payload.get("sub")
+            if username:
+                db = SessionLocal()
+                user = db.query(User).filter(User.username == username).first()
+                if user:
+                    uid = str(user.id)
+                db.close()
+        except jwt.PyJWTError:
+            pass
+    else:
+        try:
+            from auth import verify_supabase_token
+            decoded_token = verify_supabase_token(token)
+            uid = decoded_token.get("sub")
+        except Exception as e:
+            print(f"WS authentication error: {e}", flush=True)
+            pass
+
+    if not uid:
+        try:
+            await websocket.send_text(json.dumps({"type": "error", "message": "Invalid or expired authentication token."}))
+            await websocket.close(code=1008)
+        except Exception:
+            pass
+        return
+
+    await event_broadcaster.connect(uid, websocket)
+    try:
+        while True:
+            # Keep connection open and detect client disconnects
+            await websocket.receive_text()
+    except Exception:
+        pass
+    finally:
+        event_broadcaster.disconnect(uid, websocket)
 
 @app.websocket("/ws/logs/{app_name}")
 async def websocket_logs(websocket: WebSocket, app_name: str, token: Optional[str] = None):
