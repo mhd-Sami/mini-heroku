@@ -33,10 +33,7 @@
       <div class="details-header">
         <div class="details-title-row">
           <div class="details-title-group">
-            <div style="display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap;">
-              <h2 id="details-app-name">Loading...</h2>
-              <div id="details-meta-badges" style="display: flex; gap: 0.4rem; align-items: center;"></div>
-            </div>
+            <h2 id="details-app-name">Loading...</h2>
             <span class="app-card-domain">
               <a href="#" id="details-app-link" target="_blank">domain.localhost</a>
             </span>
@@ -90,19 +87,6 @@
           </div>
         </div>
 
-        <!-- Web Gateway Routing Panel -->
-        <div class="details-subcard routing-panel">
-          <h3>Web Gateway Routing</h3>
-          <div class="config-info-list">
-            <div><strong>Subdomain URL:</strong> <span><a href="#" id="routing-subdomain" target="_blank" style="color: var(--color-accent); text-decoration: underline; font-weight: 600;">Loading...</a></span></div>
-            <div><strong>Traefik Rule:</strong> <span id="routing-rule" style="font-family: var(--font-family-mono); font-size: 0.78rem;">Host(`app.localhost`)</span></div>
-            <div><strong>HTTP Entrypoint:</strong> <span>web (Port 80)</span></div>
-            <div><strong>Docker Network:</strong> <span>mini-heroku-net</span></div>
-            <div><strong>Load Balancer:</strong> <span id="routing-balancer">Internal Port 80</span></div>
-          </div>
-        </div>
-
-
         <!-- Env Variables Panel -->
         <div class="details-subcard env-panel">
           <h3>Active Environment Variables</h3>
@@ -138,10 +122,7 @@
         <div class="details-subcard logs-panel">
           <div class="logs-panel-header">
             <h3>Live Application Logs</h3>
-            <div style="display: flex; gap: 0.5rem;">
-              <button type="button" id="btn-details-clear-logs" class="btn btn-secondary btn-sm">Clear</button>
-              <button type="button" id="btn-details-copy-logs" class="btn btn-secondary btn-sm">Copy Logs</button>
-            </div>
+            <button type="button" id="btn-details-copy-logs" class="btn btn-secondary btn-sm">Copy Logs</button>
           </div>
           <div class="details-terminal-wrapper" style="background-color: #0f172a; padding: 1rem; border-radius: var(--radius-md); margin-top: 0.5rem;">
             <div id="details-terminal" class="terminal-console" style="min-height: 250px; max-height: 350px;">

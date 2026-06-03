@@ -365,20 +365,14 @@
 }
 
 .details-subcard {
-  background: var(--color-bg-surface);
+  background: rgba(15, 23, 42, 0.01);
   border: 1px solid var(--color-bg-alt);
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-sm);
   padding: 1.5rem;
   display: flex;
   flex-direction: column;
   gap: 1.25rem;
   box-shadow: var(--shadow-sm);
-  transition: all var(--transition-normal);
-}
-
-.details-subcard:hover {
-  border-color: rgba(37, 99, 235, 0.12);
-  box-shadow: var(--shadow-md);
 }
 
 .details-subcard h3 {
@@ -714,96 +708,3 @@
   color: #ffffff;
   transform: translateY(-1px);
 }
-
-/* Smooth Scrolling for anchor navigation shortcuts */
-html {
-  scroll-behavior: smooth;
-}
-
-/* Custom Sliding Toggle Switch */
-.switch {
-  position: relative;
-  display: inline-block;
-  width: 44px;
-  height: 24px;
-  flex-shrink: 0;
-}
-
-.switch input {
-  opacity: 0;
-  width: 0;
-  height: 0;
-}
-
-.slider {
-  position: absolute;
-  cursor: pointer;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background-color: var(--color-bg-alt);
-  transition: .25s cubic-bezier(0.16, 1, 0.3, 1);
-  border-radius: var(--radius-full);
-  border: 1px solid rgba(15, 23, 42, 0.06);
-}
-
-.slider:before {
-  position: absolute;
-  content: "";
-  height: 16px;
-  width: 16px;
-  left: 3px;
-  bottom: 3px;
-  background-color: white;
-  transition: .25s cubic-bezier(0.16, 1, 0.3, 1);
-  border-radius: 50%;
-  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.15);
-}
-
-input:checked + .slider {
-  background-color: var(--color-success);
-  border-color: transparent;
-}
-
-input:checked + .slider:before {
-  transform: translateX(20px);
-}
-
-/* Layout Spanning for Env variables card */
-.env-panel {
-  grid-column: span 2;
-}
-
-@media (max-width: 992px) {
-  .env-panel {
-    grid-column: span 1;
-  }
-}
-
-/* Account Settings Sidebar Menu Items */
-.settings-nav-item {
-  display: flex;
-  align-items: center;
-  gap: 0.65rem;
-  font-size: 0.82rem;
-  font-weight: 600;
-  padding: 0.65rem 0.85rem;
-  border-radius: var(--radius-sm);
-  color: var(--color-text-muted) !important;
-  border-left: 3px solid transparent;
-  transition: all var(--transition-fast);
-}
-
-.settings-nav-item:hover {
-  color: var(--color-text-main) !important;
-  background-color: var(--color-bg-cream);
-  text-decoration: none;
-}
-
-.settings-nav-item.active {
-  color: var(--color-accent) !important;
-  background-color: var(--color-bg-cream);
-  border-left-color: var(--color-accent);
-}
-

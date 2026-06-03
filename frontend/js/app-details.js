@@ -30,15 +30,10 @@ const detailsTerminal = document.getElementById('details-terminal');
 const detailsAutoDeploy = document.getElementById('details-auto-deploy');
 
 const btnDetailsCopyLogs = document.getElementById('btn-details-copy-logs');
-const btnDetailsClearLogs = document.getElementById('btn-details-clear-logs');
 const btnDetailsStart = document.getElementById('btn-details-start');
 const btnDetailsStop = document.getElementById('btn-details-stop');
 const btnDetailsRestart = document.getElementById('btn-details-restart');
 const btnDetailsDelete = document.getElementById('btn-details-delete');
-
-const routingSubdomain = document.getElementById('routing-subdomain');
-const routingRule = document.getElementById('routing-rule');
-const routingBalancer = document.getElementById('routing-balancer');
 
 // Parse Query Parameters
 function parseQuery() {
@@ -48,23 +43,7 @@ function parseQuery() {
     window.location.href = 'apps.html';
     return;
   }
-  loadCachedDetails();
   loadDetails();
-}
-
-function loadCachedDetails() {
-  const cached = localStorage.getItem('mini_heroku_deployments_cache');
-  if (cached) {
-    try {
-      const apps = JSON.parse(cached);
-      const app = apps.find(d => d.app_name === appName);
-      if (app) {
-        renderDetails(app);
-      }
-    } catch (e) {
-      console.error("Failed to parse cached details:", e);
-    }
-  }
 }
 
 async function loadDetails() {
@@ -91,8 +70,8 @@ async function loadDetails() {
 function renderDetails(app) {
   lastStatus = app.status;
   detailsAppName.textContent = app.app_name;
-  detailsAppLink.href = getAppUrl(app.app_name);
-  detailsAppLink.textContent = getAppUrlDisplay(app.app_name);
+  detailsAppLink.href = app.local_domain;
+  detailsAppLink.textContent = `${app.app_name}.localhost`;
   
   detailsStatusBadge.className = `status-badge ${app.status}`;
   detailsStatusText.textContent = app.status;
@@ -104,46 +83,6 @@ function renderDetails(app) {
   detailsCreatedAt.textContent = new Date(app.created_at).toLocaleString();
   if (detailsUpdatedAt) {
     detailsUpdatedAt.textContent = new Date(app.updated_at || app.created_at).toLocaleString();
-  }
-
-  // Render metadata badges
-  const detailsMetaBadges = document.getElementById('details-meta-badges');
-  if (detailsMetaBadges) {
-    detailsMetaBadges.innerHTML = '';
-    if (app.last_commit_hash) {
-      const gitBadge = document.createElement('span');
-      gitBadge.className = 'badge-tag badge-git';
-      gitBadge.title = 'Last Deployed Commit';
-      gitBadge.style.cssText = 'display: inline-flex; align-items: center; gap: 0.25rem; font-size: 0.72rem; font-family: var(--font-family-mono); background: var(--color-bg-cream); border: 1px solid var(--color-bg-alt); padding: 0.2rem 0.5rem; border-radius: var(--radius-sm); color: var(--color-primary-light); font-weight: 600;';
-      gitBadge.innerHTML = `
-        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="git-icon"><line x1="6" y1="3" x2="6" y2="15"/><circle cx="18" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M18 9a9 9 0 0 1-9 9"/></svg>
-        ${app.last_commit_hash.substring(0, 7)}
-      `;
-      detailsMetaBadges.appendChild(gitBadge);
-    }
-    if (app.auto_deploy) {
-      const autoBadge = document.createElement('span');
-      autoBadge.className = 'badge-tag badge-auto-deploy-tag pulsing-dot-tag';
-      autoBadge.title = 'Auto-Deploy Active';
-      autoBadge.style.cssText = 'display: inline-flex; align-items: center; gap: 0.25rem; font-size: 0.72rem; background: rgba(16, 185, 129, 0.1); border: 1px solid rgba(16, 185, 129, 0.2); padding: 0.2rem 0.5rem; border-radius: var(--radius-sm); color: var(--color-success); font-weight: 600;';
-      autoBadge.innerHTML = `
-        <span class="pulse-dot" style="background-color: var(--color-success); width: 6px; height: 6px; position: static; transform: none; display: inline-block; margin-right: 0.2rem;"></span>
-        Auto-Deploy
-      `;
-      detailsMetaBadges.appendChild(autoBadge);
-    }
-  }
-
-  // Render routing configuration details
-  if (routingSubdomain) {
-    routingSubdomain.href = getAppUrl(app.app_name);
-    routingSubdomain.textContent = getAppUrlDisplay(app.app_name);
-  }
-  if (routingRule) {
-    routingRule.textContent = `Host(\`${app.app_name}.localhost\`) || HostRegexp(\`^${app.app_name}\\\\.\`)`;
-  }
-  if (routingBalancer) {
-    routingBalancer.textContent = `Internal Port ${app.port}`;
   }
 
   if (detailsAutoDeploy) {
@@ -215,17 +154,12 @@ function renderDetails(app) {
   btnDetailsRestart.onclick = () => runAction('restart');
   btnDetailsDelete.onclick = deleteApp;
 
-  // Stream Logs if not already connected
-  if (!detailsSocket) {
-    connectLogs();
-  }
+  // Stream Logs
+  connectLogs();
 
-  // Poll Stats if not already polling
-  if (!statsInterval) {
-    startStatsPolling();
-  }
+  // Poll Stats
+  startStatsPolling();
 }
-
 
 async function runAction(action) {
   const btn = action === 'start' ? btnDetailsStart : (action === 'stop' ? btnDetailsStop : btnDetailsRestart);
@@ -452,14 +386,6 @@ btnDetailsCopyLogs.onclick = () => {
     }, 2000);
   });
 };
-
-// Clear Logs
-if (btnDetailsClearLogs) {
-  btnDetailsClearLogs.onclick = () => {
-    detailsTerminal.innerHTML = '';
-  };
-}
-
 
 // Parse parameters on load
 parseQuery();

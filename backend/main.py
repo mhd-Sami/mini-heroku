@@ -18,8 +18,6 @@ from database import init_db, get_db, Deployment, SessionLocal, User, UserProfil
 from auth import get_current_user, hash_password, verify_password, create_access_token, SECRET_KEY, ALGORITHM, AUTH_MODE, security
 import jwt
 from auth_routes import router as auth_router
-from cache import global_cache
-
 
 _docker_client = None
 
@@ -223,11 +221,10 @@ def deploy_app_task(
         labels = {
             "traefik.enable": "true",
             "traefik.docker.network": "mini-heroku-net",
-            f"traefik.http.routers.{route_name}.rule": f'Host(`{app_name}.localhost`) || HostRegexp(`^{app_name}\\.`)',
+            f"traefik.http.routers.{route_name}.rule": f'Host("{app_name}.localhost")',
             f"traefik.http.routers.{route_name}.entrypoints": "web",
             f"traefik.http.services.{route_name}.loadbalancer.server.port": str(port)
         }
-
 
         # Convert float CPU to nano_cpus
         nano_cpus = int(cpu_limit * 1e9) if cpu_limit else None
@@ -309,9 +306,6 @@ def deploy_app_task(
             except Exception as hist_err:
                 print(f"Error logging failed deployment history: {hist_err}", flush=True)
     finally:
-        if 'deployment' in locals() and deployment and deployment.user_id:
-            global_cache.delete(f"user_deployments_{deployment.user_id}")
-            global_cache.delete(f"user_history_{deployment.user_id}")
         # Clean up temporary Git clone directory
         if os.path.exists(clone_dir):
             try:
@@ -319,7 +313,6 @@ def deploy_app_task(
             except Exception as cleanup_err:
                 log_message(app_name, f"Warning (Cleanup): {str(cleanup_err)}")
         db.close()
-
 
 # Pydantic schemas
 from pydantic import BaseModel
@@ -518,11 +511,6 @@ def get_traefik_logs(current_uid: str = Depends(get_current_user)):
 
 @app.get("/api/apps")
 def list_apps(db: Session = Depends(get_db), current_uid: str = Depends(get_current_user)):
-    cache_key = f"user_deployments_{current_uid}"
-    cached = global_cache.get(cache_key)
-    if cached is not None:
-        return cached
-
     # Automatically claim any ownerless deployments to maintain compatibility
     unowned_deployments = db.query(Deployment).filter(Deployment.user_id == None).all()
     if unowned_deployments:
@@ -567,9 +555,7 @@ def list_apps(db: Session = Depends(get_db), current_uid: str = Depends(get_curr
             "updated_at": d.updated_at.isoformat() if d.updated_at else d.created_at.isoformat(),
             "created_at": d.created_at.isoformat()
         })
-    global_cache.set(cache_key, result, ttl=30.0)
     return result
-
 
 @app.post("/api/deploy")
 def deploy_app(
@@ -638,7 +624,6 @@ def deploy_app(
         env_vars_dict=request.env_vars or {}
     )
 
-    global_cache.delete(f"user_deployments_{current_uid}")
     return {
         "status": "success",
         "message": f"Deployment and build started for '{app_name}'",
@@ -667,7 +652,6 @@ def start_app(app_name: str, db: Session = Depends(get_db), current_uid: str = D
         deployment.status = "running"
         db.commit()
         log_message(app_name, "Application container started manually.")
-        global_cache.delete(f"user_deployments_{current_uid}")
         return {"status": "success", "message": f"App {app_name} started"}
     except docker.errors.NotFound:
         raise HTTPException(status_code=400, detail="Container not found. Please trigger deployment again.")
@@ -694,12 +678,10 @@ def stop_app(app_name: str, db: Session = Depends(get_db), current_uid: str = De
         deployment.status = "stopped"
         db.commit()
         log_message(app_name, "Application container stopped manually.")
-        global_cache.delete(f"user_deployments_{current_uid}")
         return {"status": "success", "message": f"App {app_name} stopped"}
     except docker.errors.NotFound:
         deployment.status = "stopped"
         db.commit()
-        global_cache.delete(f"user_deployments_{current_uid}")
         return {"status": "success", "message": f"Container not found, marked as stopped"}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -725,7 +707,6 @@ def restart_app(app_name: str, db: Session = Depends(get_db), current_uid: str =
         deployment.status = "running"
         db.commit()
         log_message(app_name, "Application container restarted manually.")
-        global_cache.delete(f"user_deployments_{current_uid}")
         return {"status": "success", "message": f"App {app_name} restarted"}
     except docker.errors.NotFound:
         raise HTTPException(status_code=400, detail="Container not found. Please trigger deployment again.")
@@ -765,7 +746,6 @@ def delete_app(app_name: str, db: Session = Depends(get_db), current_uid: str = 
         if app_name in build_logs:
             del build_logs[app_name]
             
-        global_cache.delete(f"user_deployments_{current_uid}")
         return {"status": "success", "message": f"App {app_name} deleted successfully"}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -797,7 +777,6 @@ def toggle_auto_deploy(
             deployment.last_commit_hash = commit_hash
             
     db.commit()
-    global_cache.delete(f"user_deployments_{current_uid}")
     return {"status": "success", "auto_deploy": deployment.auto_deploy}
 
 @app.get("/api/apps/stats/bulk")
@@ -950,31 +929,13 @@ def get_system_info(current_uid: str = Depends(get_current_user)):
 
 @app.get("/api/deployments/history", response_model=list[DeploymentHistoryResponse])
 def get_deployment_history(db: Session = Depends(get_db), current_uid: str = Depends(get_current_user)):
-    cache_key = f"user_history_{current_uid}"
-    cached = global_cache.get(cache_key)
-    if cached is not None:
-        return cached
-
     history = db.query(DeploymentHistory).filter(DeploymentHistory.user_id == current_uid).order_by(DeploymentHistory.deployed_at.desc()).all()
-    result = [
-        {
-            "id": h.id,
-            "app_name": h.app_name,
-            "git_url": h.git_url,
-            "status": h.status,
-            "last_commit_hash": h.last_commit_hash,
-            "deployed_at": h.deployed_at
-        }
-        for h in history
-    ]
-    global_cache.set(cache_key, result, ttl=60.0)
-    return result
+    return history
 
 @app.delete("/api/deployments/history")
 def clear_deployment_history(db: Session = Depends(get_db), current_uid: str = Depends(get_current_user)):
     db.query(DeploymentHistory).filter(DeploymentHistory.user_id == current_uid).delete(synchronize_session=False)
     db.commit()
-    global_cache.delete(f"user_history_{current_uid}")
     return {"status": "success", "message": "Deployment history cleared successfully"}
 
 @app.delete("/api/deployments/history/{history_id}")
@@ -984,7 +945,6 @@ def delete_history_item(history_id: int, db: Session = Depends(get_db), current_
         raise HTTPException(status_code=404, detail="History item not found")
     db.delete(item)
     db.commit()
-    global_cache.delete(f"user_history_{current_uid}")
     return {"status": "success", "message": "History item deleted successfully"}
 
 @app.websocket("/ws/logs/{app_name}")

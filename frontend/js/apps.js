@@ -143,8 +143,8 @@ function renderDashboard() {
         <div class="app-card-title-group">
           <span class="app-card-title" style="cursor: pointer;" title="Click to view configuration and logs">${app.app_name}</span>
           <span class="app-card-domain">
-            <a href="${getAppUrl(app.app_name)}" target="_blank">${getAppUrlDisplay(app.app_name)}</a>
-            <button type="button" class="btn-copy-link" data-url="${getAppUrl(app.app_name)}" title="Copy Address">
+            <a href="${app.local_domain}" target="_blank">${app.app_name}.localhost</a>
+            <button type="button" class="btn-copy-link" data-url="http://${app.app_name}.localhost" title="Copy Address">
               <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1" ry="1"/></svg>
             </button>
           </span>
@@ -639,32 +639,12 @@ async function loadHistory() {
     const res = await authFetch(`${API_BASE}/api/deployments/history`);
     if (!res.ok) throw new Error('Failed to load deployment history');
     const history = await res.json();
-    localStorage.setItem('mini_heroku_history_cache', JSON.stringify(history));
     renderHistory(history);
   } catch (err) {
     console.error('Error fetching deployment history:', err);
-    const cached = localStorage.getItem('mini_heroku_history_cache');
-    if (cached) {
-      try {
-        renderHistory(JSON.parse(cached));
-        return;
-      } catch (e) {}
-    }
     if (historyTableWrapper) historyTableWrapper.classList.add('hidden');
     if (btnClearHistory) btnClearHistory.style.display = 'none';
     if (historyEmptyState) historyEmptyState.classList.remove('hidden');
-  }
-}
-
-function loadCachedHistory() {
-  const cached = localStorage.getItem('mini_heroku_history_cache');
-  if (cached) {
-    try {
-      const history = JSON.parse(cached);
-      renderHistory(history);
-    } catch (e) {
-      console.error("Failed to parse cached history:", e);
-    }
   }
 }
 
@@ -754,7 +734,6 @@ if (tabActive && tabHistory) {
     tabActive.classList.remove('active');
     activeDeploymentsView.classList.add('hidden');
     historyView.classList.remove('hidden');
-    loadCachedHistory();
     loadHistory();
   });
 }

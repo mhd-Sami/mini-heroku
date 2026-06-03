@@ -28,131 +28,51 @@
   <header class="app-header" id="app-header"></header>
 
   <main class="dashboard-container">
-    <div class="workspace-grid" style="max-width: 1400px; margin: 0 auto; width: 100%; gap: 2rem;">
-      <!-- Left Column: Settings Sidebar -->
-      <section class="workspace-card settings-sidebar" style="padding: 1.5rem; display: flex; flex-direction: column; gap: 1.5rem;">
-        <div style="display: flex; flex-direction: column; align-items: center; text-align: center; gap: 0.75rem; padding: 1.75rem 1rem; background: linear-gradient(135deg, rgba(37, 99, 235, 0.02) 0%, rgba(14, 165, 233, 0.02) 100%); border-radius: var(--radius-lg); border: 1px solid var(--color-bg-alt);">
-          <div id="avatar-circle" style="width: 64px; height: 64px; background: var(--grad-accent); color: white; font-family: var(--font-family-title); font-weight: 800; font-size: 1.75rem; display: flex; align-items: center; justify-content: center; border-radius: 50%; box-shadow: 0 6px 18px rgba(37, 99, 235, 0.2); margin-bottom: 0.25rem;">
-            U
-          </div>
-          <div>
-            <h4 style="font-family: var(--font-family-title); font-weight: 700; color: var(--color-text-main); margin-bottom: 0.15rem; font-size: 1.05rem; line-height: 1.2;" id="avatar-username">Active User</h4>
-            <span style="font-size: 0.72rem; color: var(--color-text-muted); font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em;">Vessel Tenant</span>
-          </div>
-          <span class="status-badge running" style="padding: 0.15rem 0.55rem; font-size: 0.68rem; margin-top: 0.25rem;">
-            <span class="pulse-dot"></span>
-            <span class="status-text">Connected</span>
-          </span>
+    <div class="workspace-grid" style="grid-template-columns: 1fr;">
+      <!-- Profile Metadata Card -->
+      <section class="workspace-card" aria-labelledby="profile-heading">
+        <div class="card-header">
+          <h2 id="profile-heading">Account Information</h2>
+          <p class="card-subtitle">Manage your profile credentials and security configurations</p>
         </div>
 
-        <div class="settings-nav-menu" style="display: flex; flex-direction: column; gap: 0.35rem;">
-          <a href="#profile-section" class="settings-nav-item active">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
-            Profile Settings
-          </a>
-          <a href="#preferences-section" class="settings-nav-item">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
-            Platform Preferences
-          </a>
-          <a href="#security-section" class="settings-nav-item">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
-            Security & Credentials
-          </a>
+        <div class="config-panel" style="max-width: 600px; margin-bottom: 2rem;">
+          <div class="config-info-list">
+            <div><strong>Email Address:</strong> <span id="profile-email">--</span></div>
+            <div><strong>Username:</strong> <span id="profile-username-display">--</span></div>
+            <div><strong>Active Auth Method:</strong> <span id="profile-provider">--</span></div>
+            <div><strong>User UID:</strong> <span id="profile-uid">--</span></div>
+            <div><strong>Session State:</strong> <span id="profile-status">Connected</span></div>
+            <div style="display: flex; align-items: center; justify-content: space-between; border-bottom: none;">
+              <strong>Save Deployment History:</strong>
+              <span style="display: inline-flex; align-items: center;">
+                <input type="checkbox" id="profile-save-history" style="transform: scale(1.15); cursor: pointer; margin-right: 0.5rem; vertical-align: middle;">
+                <span style="font-size: 0.75rem; color: var(--color-text-muted);">Save builds and deployments</span>
+              </span>
+            </div>
+          </div>
+        </div>
+
+        <div class="security-operations" style="border-top: 1px solid var(--color-bg-alt); padding-top: 2rem;">
+          <h3>Security Management</h3>
+          <p class="card-subtitle" style="margin-bottom: 1.25rem;">Update your account password</p>
+          
+          <form id="change-password-form" class="auth-form" style="max-width: 400px; margin-bottom: 1.5rem;">
+            <div class="form-group" style="display: flex; flex-direction: column; gap: 0.4rem; margin-bottom: 1rem;">
+              <label for="change-new-password" style="font-size: 0.85rem; font-weight: 600; color: var(--color-text-main);">New Password</label>
+              <input type="password" id="change-new-password" placeholder="••••••••" required style="height: 2.5rem; padding: 0 1rem; border-radius: var(--radius-sm); border: 1px solid var(--color-bg-alt); background-color: var(--color-bg-cream); color: var(--color-text-main);">
+            </div>
+            <div class="form-group" style="display: flex; flex-direction: column; gap: 0.4rem; margin-bottom: 1.5rem;">
+              <label for="change-confirm-password" style="font-size: 0.85rem; font-weight: 600; color: var(--color-text-main);">Confirm New Password</label>
+              <input type="password" id="change-confirm-password" placeholder="••••••••" required style="height: 2.5rem; padding: 0 1rem; border-radius: var(--radius-sm); border: 1px solid var(--color-bg-alt); background-color: var(--color-bg-cream); color: var(--color-text-main);">
+            </div>
+            <button type="submit" id="btn-submit-change-password" class="btn btn-primary" style="padding: 0.6rem 1.25rem;">Update Password</button>
+          </form>
+          
+          <div id="change-success" class="auth-message success-message hidden"></div>
+          <div id="change-error" class="auth-message error-message hidden"></div>
         </div>
       </section>
-      
-      <!-- Right Column: Settings Modules -->
-      <div style="display: flex; flex-direction: column; gap: 1.5rem;">
-        <!-- Account Profile Card -->
-        <section id="profile-section" class="workspace-card" style="padding: 2rem;">
-          <div class="card-header" style="margin-bottom: 1.5rem; padding-bottom: 0.75rem; border-bottom: 1px solid var(--color-bg-alt);">
-            <h2 id="profile-heading" style="font-family: var(--font-family-title); font-size: 1.25rem; font-weight: 700; color: var(--color-text-main);">Account Profile</h2>
-            <p class="card-subtitle">General settings and registry details</p>
-          </div>
-
-          <div class="config-panel" style="margin-bottom: 0;">
-            <div class="config-info-list" style="font-size: 0.85rem;">
-              <div>
-                <strong>Email Address:</strong>
-                <span style="display: flex; align-items: center; gap: 0.5rem;">
-                  <span id="profile-email">--</span>
-                  <button type="button" class="btn-copy-link" data-copy-target="profile-email" title="Copy Email">
-                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1" ry="1"/></svg>
-                  </button>
-                </span>
-              </div>
-              <div>
-                <strong>Username:</strong>
-                <span style="display: flex; align-items: center; gap: 0.5rem;">
-                  <span id="profile-username-display">--</span>
-                  <button type="button" class="btn-copy-link" data-copy-target="profile-username-display" title="Copy Username">
-                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1" ry="1"/></svg>
-                  </button>
-                </span>
-              </div>
-              <div>
-                <strong>Active Auth Method:</strong>
-                <span id="profile-provider">--</span>
-              </div>
-              <div>
-                <strong>User UID:</strong>
-                <span style="display: flex; align-items: center; gap: 0.5rem;">
-                  <span id="profile-uid" style="font-family: var(--font-family-mono); font-size: 0.78rem; text-overflow: ellipsis; overflow: hidden; white-space: nowrap; max-width: 250px;">--</span>
-                  <button type="button" class="btn-copy-link" data-copy-target="profile-uid" title="Copy UID">
-                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1" ry="1"/></svg>
-                  </button>
-                </span>
-              </div>
-            </div>
-          </div>
-        </section>
-
-        <!-- Preferences Section -->
-        <section id="preferences-section" class="workspace-card" style="padding: 2rem;">
-          <div class="card-header" style="margin-bottom: 1.5rem; padding-bottom: 0.75rem; border-bottom: 1px solid var(--color-bg-alt);">
-            <h2 style="font-family: var(--font-family-title); font-size: 1.25rem; font-weight: 700; color: var(--color-text-main);">PaaS Preferences</h2>
-            <p class="card-subtitle">Deploy logs preferences and compilation metrics</p>
-          </div>
-
-          <div style="flex-direction: column; align-items: stretch; border-bottom: none; padding: 0; gap: 0.5rem; display: flex;">
-            <strong style="color: var(--color-text-main); font-weight: 600; font-size: 0.85rem;">Save Deployment History</strong>
-            <div style="display: flex; align-items: center; justify-content: space-between; background: rgba(15, 23, 42, 0.02); padding: 0.65rem 0.85rem; border-radius: var(--radius-sm); border: 1px solid var(--color-bg-alt);">
-              <span style="font-size: 0.78rem; color: var(--color-text-muted);">Sync compilation and outcomes logs for audit</span>
-              <label class="switch">
-                <input type="checkbox" id="profile-save-history">
-                <span class="slider"></span>
-              </label>
-            </div>
-          </div>
-        </section>
-
-        <!-- Security Settings Card -->
-        <section id="security-section" class="workspace-card" style="padding: 2rem;">
-          <div class="card-header" style="margin-bottom: 1.5rem; padding-bottom: 0.75rem; border-bottom: 1px solid var(--color-bg-alt);">
-            <h2 id="security-heading" style="font-family: var(--font-family-title); font-size: 1.25rem; font-weight: 700; color: var(--color-text-main);">Security Settings</h2>
-            <p class="card-subtitle">Manage credentials and login safety</p>
-          </div>
-
-          <div class="security-operations" style="padding-top: 0.5rem;">
-            <p class="card-subtitle" style="margin-bottom: 1.25rem; font-weight: 600; color: var(--color-text-main);">Update Account Password</p>
-            
-            <form id="change-password-form" class="auth-form" style="display: flex; flex-direction: column; gap: 1rem;">
-              <div class="form-group" style="display: flex; flex-direction: column; gap: 0.4rem; margin-bottom: 0;">
-                <label for="change-new-password">New Password</label>
-                <input type="password" id="change-new-password" placeholder="••••••••" required>
-              </div>
-              <div class="form-group" style="display: flex; flex-direction: column; gap: 0.4rem; margin-bottom: 0.5rem;">
-                <label for="change-confirm-password">Confirm New Password</label>
-                <input type="password" id="change-confirm-password" placeholder="••••••••" required>
-              </div>
-              <button type="submit" id="btn-submit-change-password" class="btn btn-primary btn-block">Update Password</button>
-            </form>
-            
-            <div id="change-success" class="auth-message success-message hidden" style="margin-top: 1rem;"></div>
-            <div id="change-error" class="auth-message error-message hidden" style="margin-top: 1rem;"></div>
-          </div>
-        </section>
-      </div>
     </div>
   </main>
 
