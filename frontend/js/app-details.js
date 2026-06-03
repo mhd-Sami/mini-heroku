@@ -31,6 +31,7 @@ const detailsCpuLimit = document.getElementById('details-cpu-limit');
 const detailsMemLimit = document.getElementById('details-mem-limit');
 const detailsCreatedAt = document.getElementById('details-created-at');
 const detailsUpdatedAt = document.getElementById('details-updated-at');
+const detailsCustomDomain = document.getElementById('details-custom-domain');
 const detailsEnvList = document.getElementById('details-env-list');
 const detailsTerminal = document.getElementById('details-terminal');
 const detailsAutoDeploy = document.getElementById('details-auto-deploy');
@@ -51,6 +52,7 @@ const editPort = document.getElementById('edit-port');
 const editAutoDeploy = document.getElementById('edit-auto-deploy');
 const editCpuLimit = document.getElementById('edit-cpu-limit');
 const editMemLimit = document.getElementById('edit-mem-limit');
+const editCustomDomain = document.getElementById('edit-custom-domain');
 
 // Env Var Form Elements
 const btnShowAddEnv = document.getElementById('btn-show-add-env');
@@ -112,8 +114,14 @@ function renderDetails(app) {
   activeAppObj = app;
   lastStatus = app.status;
   detailsAppName.textContent = app.app_name;
-  detailsAppLink.href = app.local_domain;
-  detailsAppLink.textContent = `${app.app_name}.localhost`;
+  
+  if (app.custom_domain) {
+    detailsAppLink.href = `http://${app.custom_domain}`;
+    detailsAppLink.textContent = app.custom_domain;
+  } else {
+    detailsAppLink.href = app.local_domain;
+    detailsAppLink.textContent = `${app.app_name}.localhost`;
+  }
   
   detailsStatusBadge.className = `status-badge ${app.status}`;
   detailsStatusText.textContent = app.status.toUpperCase();
@@ -126,6 +134,9 @@ function renderDetails(app) {
   if (detailsUpdatedAt) {
     detailsUpdatedAt.textContent = new Date(app.updated_at || app.created_at).toLocaleString();
   }
+  if (detailsCustomDomain) {
+    detailsCustomDomain.textContent = app.custom_domain || 'None';
+  }
 
   if (detailsAutoDeploy) {
     detailsAutoDeploy.checked = app.auto_deploy || false;
@@ -137,6 +148,7 @@ function renderDetails(app) {
   if (editAutoDeploy) editAutoDeploy.checked = app.auto_deploy || false;
   if (editCpuLimit) editCpuLimit.value = app.cpu_limit || '';
   if (editMemLimit) editMemLimit.value = app.memory_limit || '';
+  if (editCustomDomain) editCustomDomain.value = app.custom_domain || '';
 
   // Render environment variables
   renderEnvironmentVariables(app.env_vars || {});
@@ -368,6 +380,7 @@ if (btnCancelConfig) {
       editAutoDeploy.checked = activeAppObj.auto_deploy || false;
       editCpuLimit.value = activeAppObj.cpu_limit || '';
       editMemLimit.value = activeAppObj.memory_limit || '';
+      editCustomDomain.value = activeAppObj.custom_domain || '';
     }
   });
 }
@@ -381,6 +394,7 @@ if (configEditForm) {
     const auto_deploy = editAutoDeploy.checked;
     const cpu_limit = editCpuLimit.value ? parseFloat(editCpuLimit.value) : null;
     const memory_limit = editMemLimit.value.trim() || null;
+    const custom_domain = editCustomDomain.value.trim() || null;
     
     const saveBtn = document.getElementById('btn-save-config');
     const originalText = saveBtn.textContent;
@@ -388,7 +402,7 @@ if (configEditForm) {
     saveBtn.innerHTML = `<span class="btn-spinner"></span> Saving...`;
     
     try {
-      const payload = { git_url, port, auto_deploy, cpu_limit, memory_limit };
+      const payload = { git_url, port, auto_deploy, cpu_limit, memory_limit, custom_domain };
       const success = await updateAppConfiguration(payload);
       if (success) {
         btnCancelConfig.click();
@@ -847,8 +861,11 @@ let historyIndex = -1;
 
 const tabBtnLogs = document.getElementById('tab-btn-logs');
 const tabBtnConsole = document.getElementById('tab-btn-console');
+const tabBtnBuilds = document.getElementById('tab-btn-builds');
 const panelLogs = document.getElementById('panel-logs');
 const panelConsole = document.getElementById('panel-console');
+const panelBuilds = document.getElementById('panel-builds');
+const buildsListBody = document.getElementById('builds-list-body');
 const logsActionsGroup = document.getElementById('logs-actions-group');
 
 const consoleForm = document.getElementById('console-form');
@@ -859,9 +876,14 @@ if (tabBtnLogs && tabBtnConsole) {
   tabBtnLogs.addEventListener('click', () => {
     tabBtnLogs.classList.add('active');
     tabBtnConsole.classList.remove('active');
+    if (tabBtnBuilds) tabBtnBuilds.classList.remove('active');
     
     panelConsole.style.display = 'none';
     panelConsole.classList.remove('tab-panel-fade');
+    if (panelBuilds) {
+      panelBuilds.style.display = 'none';
+      panelBuilds.classList.remove('tab-panel-fade');
+    }
     panelLogs.style.display = 'block';
     panelLogs.classList.remove('tab-panel-fade');
     void panelLogs.offsetWidth; // Force DOM reflow to re-trigger animation
@@ -873,9 +895,14 @@ if (tabBtnLogs && tabBtnConsole) {
   tabBtnConsole.addEventListener('click', () => {
     tabBtnConsole.classList.add('active');
     tabBtnLogs.classList.remove('active');
+    if (tabBtnBuilds) tabBtnBuilds.classList.remove('active');
     
     panelLogs.style.display = 'none';
     panelLogs.classList.remove('tab-panel-fade');
+    if (panelBuilds) {
+      panelBuilds.style.display = 'none';
+      panelBuilds.classList.remove('tab-panel-fade');
+    }
     panelConsole.style.display = 'block';
     panelConsole.classList.remove('tab-panel-fade');
     void panelConsole.offsetWidth; // Force DOM reflow to re-trigger animation
@@ -886,6 +913,28 @@ if (tabBtnLogs && tabBtnConsole) {
     // Connect to interactive console
     connectConsole();
   });
+
+  if (tabBtnBuilds) {
+    tabBtnBuilds.addEventListener('click', () => {
+      tabBtnBuilds.classList.add('active');
+      tabBtnLogs.classList.remove('active');
+      tabBtnConsole.classList.remove('active');
+      
+      panelLogs.style.display = 'none';
+      panelLogs.classList.remove('tab-panel-fade');
+      panelConsole.style.display = 'none';
+      panelConsole.classList.remove('tab-panel-fade');
+      panelBuilds.style.display = 'block';
+      panelBuilds.classList.remove('tab-panel-fade');
+      void panelBuilds.offsetWidth; // Force DOM reflow to re-trigger animation
+      panelBuilds.classList.add('tab-panel-fade');
+      
+      if (logsActionsGroup) logsActionsGroup.style.display = 'none';
+      
+      // Load build history
+      loadBuildHistory();
+    });
+  }
 }
 
 function connectConsole() {
@@ -1035,4 +1084,103 @@ function showToastNotification(message) {
     toast.style.animation = 'toastOut 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards';
     setTimeout(() => toast.remove(), 300);
   }, 6000);
+}
+
+async function loadBuildHistory() {
+  if (!buildsListBody) return;
+  buildsListBody.innerHTML = '<tr><td colspan="5" style="text-align: center; padding: 2rem; color: var(--color-text-muted);">Loading builds...</td></tr>';
+  try {
+    const res = await authFetch(`${API_BASE}/api/apps/${appName}/builds`);
+    if (!res.ok) throw new Error('Failed to fetch builds');
+    const builds = await res.json();
+    renderBuildsList(builds);
+  } catch (err) {
+    buildsListBody.innerHTML = `<tr><td colspan="5" style="text-align: center; padding: 2rem; color: var(--color-danger);">Error: ${err.message}</td></tr>`;
+  }
+}
+
+function renderBuildsList(builds) {
+  if (!buildsListBody) return;
+  buildsListBody.innerHTML = '';
+  if (builds.length === 0) {
+    buildsListBody.innerHTML = '<tr><td colspan="5" style="text-align: center; padding: 2rem; color: var(--color-text-muted);">No build history available.</td></tr>';
+    return;
+  }
+
+  builds.forEach(build => {
+    const row = document.createElement('tr');
+    row.style.borderBottom = '1px solid var(--color-bg-alt)';
+    
+    const tagCell = document.createElement('td');
+    tagCell.style.padding = '0.75rem 1rem; font-family: var(--font-family-mono); font-weight: 600; color: var(--color-text-main);';
+    tagCell.textContent = build.version_tag;
+    
+    const hashCell = document.createElement('td');
+    hashCell.style.padding = '0.75rem 1rem; font-family: var(--font-family-mono); color: var(--color-text-muted);';
+    hashCell.textContent = build.commit_hash ? build.commit_hash.substring(0, 7) : 'N/A';
+    
+    const dateCell = document.createElement('td');
+    dateCell.style.padding = '0.75rem 1rem; color: var(--color-text-muted);';
+    dateCell.textContent = new Date(build.created_at).toLocaleString();
+    
+    const statusCell = document.createElement('td');
+    statusCell.style.padding = '0.75rem 1rem;';
+    const badge = document.createElement('span');
+    badge.className = `status-badge ${build.status === 'success' ? 'running' : 'failed'}`;
+    badge.textContent = build.status.toUpperCase();
+    badge.style.fontSize = '0.72rem';
+    badge.style.padding = '0.2rem 0.5rem';
+    statusCell.appendChild(badge);
+    
+    const actionCell = document.createElement('td');
+    actionCell.style.padding = '0.75rem 1rem; text-align: right;';
+    
+    const rollbackBtn = document.createElement('button');
+    rollbackBtn.className = 'btn btn-secondary btn-xs';
+    rollbackBtn.style.fontWeight = '600';
+    rollbackBtn.textContent = 'Rollback';
+    
+    if (build.status !== 'success') {
+      rollbackBtn.disabled = true;
+    } else if (activeAppObj && activeAppObj.last_commit_hash === build.commit_hash) {
+      rollbackBtn.disabled = true;
+      rollbackBtn.textContent = 'Active';
+      rollbackBtn.classList.remove('btn-secondary');
+      rollbackBtn.classList.add('btn-success-outline');
+      rollbackBtn.style.color = 'var(--color-success)';
+    }
+    
+    rollbackBtn.onclick = () => triggerRollback(build.id, build.version_tag);
+    
+    actionCell.appendChild(rollbackBtn);
+    
+    row.appendChild(tagCell);
+    row.appendChild(hashCell);
+    row.appendChild(dateCell);
+    row.appendChild(statusCell);
+    row.appendChild(actionCell);
+    
+    buildsListBody.appendChild(row);
+  });
+}
+
+async function triggerRollback(buildId, versionTag) {
+  if (!confirm(`Are you sure you want to rollback this application to version '${versionTag}'?`)) {
+    return;
+  }
+  
+  showToastNotification(`Triggering rollback to '${versionTag}'...`);
+  try {
+    const res = await authFetch(`${API_BASE}/api/apps/${appName}/rollback/${buildId}`, {
+      method: 'POST'
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail || 'Rollback failed');
+    
+    showToastNotification(`Successfully rolled back to '${versionTag}'!`);
+    loadDetails();
+    loadBuildHistory();
+  } catch (err) {
+    alert(`Rollback failed: ${err.message}`);
+  }
 }

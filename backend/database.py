@@ -83,6 +83,7 @@ class Deployment(Base):
     auto_deploy = Column(Boolean, default=False)
     last_commit_hash = Column(String, nullable=True)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    custom_domain = Column(String, nullable=True)
 
     __table_args__ = (
         Index('idx_deployments_auto_deploy_status', 'auto_deploy', 'status'),
@@ -103,6 +104,16 @@ class DeploymentHistory(Base):
         Index('idx_history_user_deployed', 'user_id', 'deployed_at'),
     )
 
+class Build(Base):
+    __tablename__ = "builds"
+
+    id = Column(Integer, primary_key=True, index=True)
+    app_name = Column(String, ForeignKey("deployments.app_name", ondelete="CASCADE"), index=True, nullable=False)
+    version_tag = Column(String, nullable=False)
+    commit_hash = Column(String, nullable=True)
+    status = Column(String, nullable=False)  # success, failed
+    created_at = Column(DateTime, default=datetime.utcnow)
+
 def init_db():
     Base.metadata.create_all(bind=engine)
     # Check if table deployments exists and if it has required columns
@@ -119,6 +130,8 @@ def init_db():
             if 'updated_at' not in columns:
                 # Add default current timestamp for postgres/sqlite compatible formats
                 conn.execute(text("ALTER TABLE deployments ADD COLUMN updated_at TIMESTAMP"))
+            if 'custom_domain' not in columns:
+                conn.execute(text("ALTER TABLE deployments ADD COLUMN custom_domain TEXT"))
 
     # Check if table user_profiles exists and if it has save_history column
     if 'user_profiles' in inspector.get_table_names():

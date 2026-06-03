@@ -14,10 +14,42 @@ from sqlalchemy.orm import Session
 import docker
 import docker.errors
 
-from database import init_db, get_db, Deployment, SessionLocal, User, UserProfile, DeploymentHistory
+from database import init_db, get_db, Deployment, SessionLocal, User, UserProfile, DeploymentHistory, Build
 from auth import get_current_user, hash_password, verify_password, create_access_token, SECRET_KEY, ALGORITHM, AUTH_MODE, security
 import jwt
 from auth_routes import router as auth_router
+import base64
+import hashlib
+from cryptography.fernet import Fernet
+
+def get_fernet_key() -> bytes:
+    h = hashlib.sha256(SECRET_KEY.encode('utf-8')).digest()
+    return base64.urlsafe_b64encode(h)
+
+def encrypt_env_vars(env_vars: dict) -> str:
+    if not env_vars:
+        return ""
+    serialized = json.dumps(env_vars)
+    key = get_fernet_key()
+    f = Fernet(key)
+    encrypted = f.encrypt(serialized.encode('utf-8'))
+    return encrypted.decode('utf-8')
+
+def decrypt_env_vars(encrypted_str: str) -> dict:
+    if not encrypted_str:
+        return {}
+    try:
+        key = get_fernet_key()
+        f = Fernet(key)
+        decrypted = f.decrypt(encrypted_str.encode('utf-8'))
+        return json.loads(decrypted.decode('utf-8'))
+    except Exception as e:
+        # Fallback to plain text JSON parse for backward compatibility
+        try:
+            return json.loads(encrypted_str)
+        except Exception:
+            print(f"Warning: Failed to decrypt env_vars and failed to parse as plain JSON: {e}")
+            return {}
 
 _docker_client = None
 
@@ -157,11 +189,12 @@ def serialize_deployment(d: Deployment) -> dict:
         "status": d.status,
         "cpu_limit": d.cpu_limit,
         "memory_limit": d.memory_limit,
-        "env_vars": json.loads(d.env_vars) if d.env_vars else {},
+        "env_vars": decrypt_env_vars(d.env_vars),
         "auto_deploy": d.auto_deploy,
         "last_commit_hash": d.last_commit_hash,
         "updated_at": d.updated_at.isoformat() if d.updated_at else (d.created_at.isoformat() if d.created_at else None),
-        "created_at": d.created_at.isoformat() if d.created_at else None
+        "created_at": d.created_at.isoformat() if d.created_at else None,
+        "custom_domain": d.custom_domain
     }
 
 def log_message(app_name: str, message: str):
@@ -213,6 +246,9 @@ def deploy_app_task(
     if os.path.exists(clone_dir):
         shutil.rmtree(clone_dir)
 
+    build_tag = None
+    commit_hash = None
+
     try:
         # 1. Clone Github Repository
         log_message(app_name, f"Cloning repository: {git_url}...")
@@ -235,8 +271,26 @@ def deploy_app_task(
         if not os.path.exists(dockerfile_path):
             raise Exception("No Dockerfile found in root of repository. Dockerfile is required.")
 
+        # Get commit hash of what was built
+        try:
+            hash_result = subprocess.run(
+                ["git", "rev-parse", "HEAD"],
+                cwd=clone_dir,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+                timeout=10
+            )
+            if hash_result.returncode == 0 and hash_result.stdout:
+                commit_hash = hash_result.stdout.strip()
+        except Exception as hash_err:
+            log_message(app_name, f"Warning: Could not fetch build commit hash: {hash_err}")
+
         # 3. Docker build
-        log_message(app_name, "Dockerfile found. Starting BuildKit Docker image build...")
+        timestamp = datetime.utcnow().strftime('%Y%m%d%H%M%S')
+        build_tag = f"{app_name}:build-{timestamp}"
+        log_message(app_name, f"Starting build for tag: {build_tag}")
+        
         client = get_docker_client()
 
         # Connect network check
@@ -250,7 +304,7 @@ def deploy_app_task(
         build_env["DOCKER_BUILDKIT"] = "1"
         
         process = subprocess.Popen(
-            ["docker", "build", "-t", app_name, "."],
+            ["docker", "build", "-t", build_tag, "-t", app_name, "."],
             cwd=clone_dir,
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
@@ -284,7 +338,7 @@ def deploy_app_task(
         if port == 0:
             try:
                 log_message(app_name, "Auto-detecting port from built Docker image...")
-                image = client.images.get(app_name)
+                image = client.images.get(build_tag)
                 exposed_ports = image.attrs.get('Config', {}).get('ExposedPorts', {})
                 if exposed_ports:
                     ports = [int(p.split('/')[0]) for p in exposed_ports.keys()]
@@ -316,10 +370,15 @@ def deploy_app_task(
         # Traefik router/service identifiers in label keys must be strictly alphanumeric
         route_name = re.sub(r'[^a-zA-Z0-9]', '', app_name)
 
+        custom_domain = deployment.custom_domain
+        rule = f'Host("{app_name}.localhost")'
+        if custom_domain:
+            rule += f' || Host("{custom_domain}")'
+
         labels = {
             "traefik.enable": "true",
             "traefik.docker.network": "mini-heroku-net",
-            f"traefik.http.routers.{route_name}.rule": f'Host("{app_name}.localhost")',
+            f"traefik.http.routers.{route_name}.rule": rule,
             f"traefik.http.routers.{route_name}.entrypoints": "web",
             f"traefik.http.services.{route_name}.loadbalancer.server.port": str(final_port)
         }
@@ -328,7 +387,7 @@ def deploy_app_task(
         nano_cpus = int(cpu_limit * 1e9) if cpu_limit else None
 
         container = client.containers.run(
-            image=app_name,
+            image=build_tag,
             name=app_name,
             detach=True,
             network="mini-heroku-net",
@@ -341,29 +400,33 @@ def deploy_app_task(
 
         log_message(app_name, f"Successfully deployed! Container ID: {container.short_id}")
         log_message(app_name, f"Application route is active: http://{app_name}.localhost")
+        if custom_domain:
+            log_message(app_name, f"Custom domain bound: {custom_domain}")
 
         deployment.status = "running"
         deployment.container_id = container.id
         deployment.port = final_port
         deployment.updated_at = datetime.utcnow()
-
-        # Get commit hash of what was built
-        try:
-            hash_result = subprocess.run(
-                ["git", "rev-parse", "HEAD"],
-                cwd=clone_dir,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                text=True,
-                timeout=10
-            )
-            if hash_result.returncode == 0 and hash_result.stdout:
-                deployment.last_commit_hash = hash_result.stdout.strip()
-                log_message(app_name, f"Cached last deployed commit hash: {deployment.last_commit_hash}")
-        except Exception as hash_err:
-            log_message(app_name, f"Warning: Could not fetch build commit hash: {hash_err}")
+        if commit_hash:
+            deployment.last_commit_hash = commit_hash
+            log_message(app_name, f"Cached last deployed commit hash: {deployment.last_commit_hash}")
 
         db.commit()
+
+        # Create successful Build record
+        if build_tag:
+            try:
+                build_record = Build(
+                    app_name=app_name,
+                    version_tag=build_tag,
+                    commit_hash=commit_hash,
+                    status="success"
+                )
+                db.add(build_record)
+                db.commit()
+            except Exception as build_db_err:
+                print(f"Error registering successful build: {build_db_err}", flush=True)
+
         send_realtime_event(deployment.user_id, "app_updated", serialize_deployment(deployment))
 
         # Save history if enabled
@@ -397,6 +460,21 @@ def deploy_app_task(
         deployment.status = "failed"
         deployment.updated_at = datetime.utcnow()
         db.commit()
+        
+        # Save failed Build record if we got to the build step
+        if build_tag:
+            try:
+                build_record = Build(
+                    app_name=app_name,
+                    version_tag=build_tag,
+                    commit_hash=commit_hash,
+                    status="failed"
+                )
+                db.add(build_record)
+                db.commit()
+            except Exception as build_db_err:
+                print(f"Error registering failed build: {build_db_err}", flush=True)
+
         send_realtime_event(deployment.user_id, "app_updated", serialize_deployment(deployment))
 
         # Save history if enabled
@@ -455,6 +533,7 @@ class DeployRequest(BaseModel):
     memory_limit: Optional[str] = None
     env_vars: Optional[Dict[str, str]] = None
     auto_deploy: Optional[bool] = False
+    custom_domain: Optional[str] = None
 
 class ConfigureAppRequest(BaseModel):
     git_url: Optional[str] = None
@@ -463,6 +542,7 @@ class ConfigureAppRequest(BaseModel):
     memory_limit: Optional[str] = None
     env_vars: Optional[Dict[str, str]] = None
     auto_deploy: Optional[bool] = None
+    custom_domain: Optional[str] = None
 
 @app.on_event("startup")
 def startup_event():
@@ -596,7 +676,7 @@ async def auto_deploy_poller():
                         app.port,
                         app.cpu_limit,
                         app.memory_limit,
-                        json.loads(app.env_vars) if app.env_vars else {}
+                        decrypt_env_vars(app.env_vars)
                     )
         except Exception as e:
             print(f"[AUTO-DEPLOY] Error in poller loop: {e}", flush=True)
@@ -677,11 +757,12 @@ def list_apps(db: Session = Depends(get_db), current_uid: str = Depends(get_curr
             "status": actual_status,
             "cpu_limit": d.cpu_limit,
             "memory_limit": d.memory_limit,
-            "env_vars": json.loads(d.env_vars) if d.env_vars else {},
+            "env_vars": decrypt_env_vars(d.env_vars),
             "auto_deploy": d.auto_deploy,
             "last_commit_hash": d.last_commit_hash,
             "updated_at": d.updated_at.isoformat() if d.updated_at else d.created_at.isoformat(),
-            "created_at": d.created_at.isoformat()
+            "created_at": d.created_at.isoformat(),
+            "custom_domain": d.custom_domain
         })
     return result
 
@@ -715,11 +796,13 @@ def deploy_app(
         existing.port = request.port
         existing.cpu_limit = request.cpu_limit
         existing.memory_limit = request.memory_limit
-        existing.env_vars = json.dumps(request.env_vars) if request.env_vars else "{}"
+        existing.env_vars = encrypt_env_vars(request.env_vars or {})
         existing.status = "building"
         existing.user_id = current_uid  # Claim ownership if it was None
         if request.auto_deploy is not None:
             existing.auto_deploy = request.auto_deploy
+        if request.custom_domain is not None:
+            existing.custom_domain = request.custom_domain.strip() if request.custom_domain.strip() else None
         db.commit()
         db_id = existing.id
     else:
@@ -732,9 +815,10 @@ def deploy_app(
             status="building",
             cpu_limit=request.cpu_limit,
             memory_limit=request.memory_limit,
-            env_vars=json.dumps(request.env_vars) if request.env_vars else "{}",
+            env_vars=encrypt_env_vars(request.env_vars or {}),
             user_id=current_uid,
-            auto_deploy=request.auto_deploy or False
+            auto_deploy=request.auto_deploy or False,
+            custom_domain=request.custom_domain.strip() if request.custom_domain and request.custom_domain.strip() else None
         )
         db.add(deployment)
         db.commit()
@@ -944,9 +1028,11 @@ def configure_app(
     if request.memory_limit is not None:
         deployment.memory_limit = request.memory_limit
     if request.env_vars is not None:
-        deployment.env_vars = json.dumps(request.env_vars)
+        deployment.env_vars = encrypt_env_vars(request.env_vars)
     if request.auto_deploy is not None:
         deployment.auto_deploy = request.auto_deploy
+    if request.custom_domain is not None:
+        deployment.custom_domain = request.custom_domain.strip() if request.custom_domain.strip() else None
 
     deployment.updated_at = datetime.utcnow()
     db.commit()
@@ -966,15 +1052,20 @@ def configure_app(
 
             # Launch new container with new settings
             route_name = re.sub(r'[^a-zA-Z0-9]', '', app_name)
+            custom_domain = deployment.custom_domain
+            rule = f'Host("{app_name}.localhost")'
+            if custom_domain:
+                rule += f' || Host("{custom_domain}")'
+
             labels = {
                 "traefik.enable": "true",
                 "traefik.docker.network": "mini-heroku-net",
-                f"traefik.http.routers.{route_name}.rule": f'Host("{app_name}.localhost")',
+                f"traefik.http.routers.{route_name}.rule": rule,
                 f"traefik.http.routers.{route_name}.entrypoints": "web",
                 f"traefik.http.services.{route_name}.loadbalancer.server.port": str(deployment.port)
             }
             nano_cpus = int(deployment.cpu_limit * 1e9) if deployment.cpu_limit else None
-            env_vars_dict = request.env_vars if request.env_vars is not None else (json.loads(deployment.env_vars) if deployment.env_vars else {})
+            env_vars_dict = request.env_vars if request.env_vars is not None else decrypt_env_vars(deployment.env_vars)
 
             container = client.containers.run(
                 image=app_name,
@@ -1004,11 +1095,12 @@ def configure_app(
                 "status": deployment.status,
                 "cpu_limit": deployment.cpu_limit,
                 "memory_limit": deployment.memory_limit,
-                "env_vars": json.loads(deployment.env_vars) if deployment.env_vars else {},
+                "env_vars": decrypt_env_vars(deployment.env_vars),
                 "auto_deploy": deployment.auto_deploy,
                 "last_commit_hash": deployment.last_commit_hash,
                 "updated_at": deployment.updated_at.isoformat(),
-                "created_at": deployment.created_at.isoformat()
+                "created_at": deployment.created_at.isoformat(),
+                "custom_domain": deployment.custom_domain
             }
             send_realtime_event(deployment.user_id, "app_updated", app_data)
             raise HTTPException(status_code=500, detail=f"Failed to recreate container: {str(e)}")
@@ -1023,11 +1115,12 @@ def configure_app(
         "status": deployment.status,
         "cpu_limit": deployment.cpu_limit,
         "memory_limit": deployment.memory_limit,
-        "env_vars": json.loads(deployment.env_vars) if deployment.env_vars else {},
+        "env_vars": decrypt_env_vars(deployment.env_vars),
         "auto_deploy": deployment.auto_deploy,
         "last_commit_hash": deployment.last_commit_hash,
         "updated_at": deployment.updated_at.isoformat(),
-        "created_at": deployment.created_at.isoformat()
+        "created_at": deployment.created_at.isoformat(),
+        "custom_domain": deployment.custom_domain
     }
     send_realtime_event(deployment.user_id, "app_updated", app_data)
 
@@ -1529,6 +1622,125 @@ async def websocket_console(websocket: WebSocket, app_name: str, token: Optional
     except Exception:
         # Connection closed or client disconnected
         pass
+
+@app.get("/api/apps/{app_name}/builds")
+def list_app_builds(app_name: str, db: Session = Depends(get_db), current_uid: str = Depends(get_current_user)):
+    deployment = db.query(Deployment).filter(Deployment.app_name == app_name).first()
+    if not deployment:
+        raise HTTPException(status_code=404, detail="App not found")
+    if deployment.user_id is not None and str(deployment.user_id) != str(current_uid):
+        raise HTTPException(status_code=403, detail="Permission denied")
+
+    builds = db.query(Build).filter(Build.app_name == app_name).order_by(Build.created_at.desc()).all()
+    return [
+        {
+            "id": b.id,
+            "app_name": b.app_name,
+            "version_tag": b.version_tag,
+            "commit_hash": b.commit_hash,
+            "status": b.status,
+            "created_at": b.created_at.isoformat()
+        } for b in builds
+    ]
+
+@app.post("/api/apps/{app_name}/rollback/{build_id}")
+def rollback_app(
+    app_name: str,
+    build_id: int,
+    db: Session = Depends(get_db),
+    current_uid: str = Depends(get_current_user)
+):
+    deployment = db.query(Deployment).filter(Deployment.app_name == app_name).first()
+    if not deployment:
+        raise HTTPException(status_code=404, detail="App not found")
+    if deployment.user_id is not None and str(deployment.user_id) != str(current_uid):
+        raise HTTPException(status_code=403, detail="Permission denied")
+
+    build = db.query(Build).filter(Build.id == build_id, Build.app_name == app_name).first()
+    if not build:
+        raise HTTPException(status_code=404, detail="Build record not found")
+    if build.status != "success":
+        raise HTTPException(status_code=400, detail="Cannot rollback to a failed build")
+
+    # Re-verify container image exists locally
+    try:
+        client = get_docker_client()
+        client.images.get(build.version_tag)
+    except docker.errors.ImageNotFound:
+        raise HTTPException(status_code=400, detail=f"Docker image for build tag '{build.version_tag}' not found locally.")
+
+    try:
+        # Stop and remove old container
+        try:
+            old_container = client.containers.get(app_name)
+            log_message(app_name, f"Rollback: Stopping and removing old container...")
+            old_container.stop(timeout=5)
+            old_container.remove()
+        except docker.errors.NotFound:
+            pass
+
+        # Prepare Traefik labels
+        route_name = re.sub(r'[^a-zA-Z0-9]', '', app_name)
+        custom_domain = deployment.custom_domain
+        rule = f'Host("{app_name}.localhost")'
+        if custom_domain:
+            rule += f' || Host("{custom_domain}")'
+
+        labels = {
+            "traefik.enable": "true",
+            "traefik.docker.network": "mini-heroku-net",
+            f"traefik.http.routers.{route_name}.rule": rule,
+            f"traefik.http.routers.{route_name}.entrypoints": "web",
+            f"traefik.http.services.{route_name}.loadbalancer.server.port": str(deployment.port)
+        }
+
+        # Convert float CPU to nano_cpus
+        nano_cpus = int(deployment.cpu_limit * 1e9) if deployment.cpu_limit else None
+        env_vars_dict = decrypt_env_vars(deployment.env_vars)
+
+        container = client.containers.run(
+            image=build.version_tag,
+            name=app_name,
+            detach=True,
+            network="mini-heroku-net",
+            labels=labels,
+            environment=env_vars_dict,
+            nano_cpus=nano_cpus,
+            mem_limit=deployment.memory_limit if deployment.memory_limit else None,
+            restart_policy={"Name": "on-failure"}
+        )
+
+        deployment.status = "running"
+        deployment.container_id = container.id
+        deployment.last_commit_hash = build.commit_hash
+        deployment.updated_at = datetime.utcnow()
+        db.commit()
+
+        log_message(app_name, f"Successfully rolled back to build: {build.version_tag}")
+        send_realtime_event(deployment.user_id, "app_updated", serialize_deployment(deployment))
+        
+        # Save history entry for rollback
+        try:
+            profile = db.query(UserProfile).filter(UserProfile.id == deployment.user_id).first()
+            if not profile or getattr(profile, "save_history", True):
+                history_entry = DeploymentHistory(
+                    user_id=deployment.user_id,
+                    app_name=app_name,
+                    git_url=deployment.git_url,
+                    status="success",
+                    last_commit_hash=f"Rollback to {build.version_tag.split('-')[-1][:8]}"
+                )
+                db.add(history_entry)
+                db.commit()
+        except Exception:
+            pass
+
+        return {"status": "success", "message": f"Successfully rolled back to build tag {build.version_tag}"}
+    except Exception as e:
+        deployment.status = "failed"
+        db.commit()
+        send_realtime_event(deployment.user_id, "app_updated", serialize_deployment(deployment))
+        raise HTTPException(status_code=500, detail=f"Rollback failed: {str(e)}")
 
 # Mount frontend files (served at app root)
 frontend_path = "/app/frontend"
