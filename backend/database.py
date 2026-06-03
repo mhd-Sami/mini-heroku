@@ -97,6 +97,17 @@ class DeploymentHistory(Base):
 
 def init_db():
     Base.metadata.create_all(bind=engine)
+    
+    # Verify and create indexes if not exists
+    with engine.begin() as conn:
+        try:
+            conn.execute(text("CREATE INDEX IF NOT EXISTS idx_deployments_user_id ON deployments(user_id);"))
+            conn.execute(text("CREATE INDEX IF NOT EXISTS idx_deployment_history_app_name ON deployment_history(app_name);"))
+            conn.execute(text("CREATE INDEX IF NOT EXISTS idx_user_profiles_username ON user_profiles(username);"))
+            print("Database indexes verification completed.", flush=True)
+        except Exception as e:
+            print(f"Warning: Could not create database indexes: {e}", flush=True)
+
     # Check if table deployments exists and if it has required columns
     inspector = inspect(engine)
     if 'deployments' in inspector.get_table_names():

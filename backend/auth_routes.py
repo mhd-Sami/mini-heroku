@@ -18,6 +18,8 @@ from auth import (
     AUTH_MODE,
     security
 )
+from cache import global_cache
+
 
 router = APIRouter(prefix="/api/auth", tags=["Authentication"])
 
@@ -85,10 +87,15 @@ def resolve_username(username: str, db: Session = Depends(get_db)):
 
 @router.get("/profile")
 def get_profile(db: Session = Depends(get_db), current_uid: str = Depends(get_current_user)):
+    cache_key = f"user_profile_{current_uid}"
+    cached = global_cache.get(cache_key)
+    if cached is not None:
+        return cached
+
     profile = db.query(UserProfile).filter(UserProfile.id == current_uid).first()
     if not profile:
         raise HTTPException(status_code=404, detail="Profile not found")
-    return {
+    result = {
         "name": profile.name,
         "use_case": profile.use_case,
         "company": profile.company,
@@ -96,6 +103,8 @@ def get_profile(db: Session = Depends(get_db), current_uid: str = Depends(get_cu
         "username": profile.username,
         "save_history": getattr(profile, "save_history", True)
     }
+    global_cache.set(cache_key, result, ttl=300.0)
+    return result
 
 @router.post("/profile/history-settings")
 def update_history_settings(request: HistorySettingsUpdate, db: Session = Depends(get_db), current_uid: str = Depends(get_current_user)):
@@ -104,6 +113,7 @@ def update_history_settings(request: HistorySettingsUpdate, db: Session = Depend
         raise HTTPException(status_code=404, detail="Profile not found")
     profile.save_history = request.save_history
     db.commit()
+    global_cache.delete(f"user_profile_{current_uid}")
     return {"status": "success", "message": "History settings updated successfully"}
 
 @router.post("/profile")
@@ -162,6 +172,7 @@ def create_profile(
         )
         db.add(profile)
     db.commit()
+    global_cache.delete(f"user_profile_{current_uid}")
     return {"status": "success", "message": "Profile updated successfully"}
 
 @router.post("/register")

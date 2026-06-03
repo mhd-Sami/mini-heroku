@@ -23,6 +23,16 @@ async function loadAccountInfo() {
   profileEmail.textContent = username.includes('@') ? username : '--';
   currentEmail = username;
 
+  // Set avatar details dynamically
+  const avatarUsername = document.getElementById('avatar-username');
+  if (avatarUsername) {
+    avatarUsername.textContent = username.includes('@') ? username.split('@')[0] : username;
+  }
+  const avatarCircle = document.getElementById('avatar-circle');
+  if (avatarCircle && username.length > 0) {
+    avatarCircle.textContent = username.charAt(0).toUpperCase();
+  }
+
   try {
     const res = await fetch(`${API_BASE}/api/auth/config`);
     if (!res.ok) throw new Error('Failed to load auth config');
@@ -82,6 +92,14 @@ async function loadProfileInfo() {
         }
         if (profileUsernameDisplay) {
           profileUsernameDisplay.textContent = data.username;
+        }
+        const avatarUsername = document.getElementById('avatar-username');
+        if (avatarUsername) {
+          avatarUsername.textContent = data.username;
+        }
+        const avatarCircle = document.getElementById('avatar-circle');
+        if (avatarCircle) {
+          avatarCircle.textContent = data.username.charAt(0).toUpperCase();
         }
       }
       if (data.save_history !== undefined) {
@@ -187,3 +205,37 @@ if (changePasswordForm) {
 
 loadAccountInfo();
 loadProfileInfo();
+
+// Bind Clipboard Copy buttons
+document.querySelectorAll('.btn-copy-link').forEach(btn => {
+  btn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    const targetId = btn.getAttribute('data-copy-target');
+    const targetEl = document.getElementById(targetId);
+    if (targetEl) {
+      const textToCopy = targetEl.textContent.trim();
+      navigator.clipboard.writeText(textToCopy).then(() => {
+        const originalHTML = btn.innerHTML;
+        btn.innerHTML = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--color-success)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>`;
+        btn.style.color = 'var(--color-success)';
+        setTimeout(() => {
+          btn.innerHTML = originalHTML;
+          btn.style.color = '';
+        }, 1500);
+      }).catch(err => {
+        console.error('Could not copy text: ', err);
+      });
+    }
+  });
+});
+
+// Sidebar navigation active state updates
+const navItems = document.querySelectorAll('.settings-nav-item');
+navItems.forEach(item => {
+  item.addEventListener('click', () => {
+    navItems.forEach(i => i.classList.remove('active'));
+    item.classList.add('active');
+  });
+});
+
+

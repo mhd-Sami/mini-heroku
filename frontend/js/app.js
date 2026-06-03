@@ -123,7 +123,7 @@ function renderActiveServicesSummary(deployments) {
     tr.innerHTML = `
       <td style="font-weight: 600; color: var(--color-text-main); font-size: 0.85rem; padding: 0.75rem 1rem; border-bottom: 1px solid var(--color-bg-alt);">${app.app_name}</td>
       <td style="font-size: 0.82rem; padding: 0.75rem 1rem; border-bottom: 1px solid var(--color-bg-alt);">
-        <a href="${app.local_domain}" target="_blank" style="color: var(--color-primary-light); font-weight: 500;">${app.app_name}.localhost</a>
+        <a href="${getAppUrl(app.app_name)}" target="_blank" style="color: var(--color-primary-light); font-weight: 500;">${getAppUrlDisplay(app.app_name)}</a>
       </td>
       <td style="padding: 0.75rem 1rem; border-bottom: 1px solid var(--color-bg-alt);">
         <span class="status-badge running" style="padding: 0.15rem 0.5rem; font-size: 0.7rem;">
@@ -252,16 +252,23 @@ if (deployForm) {
 // Load metrics on start
 function loadCachedMetrics() {
   const cached = localStorage.getItem('mini_heroku_deployments_cache');
-  if (cached) {
-    try {
-      const deployments = JSON.parse(cached);
-      if (deployments) {
-        updateMetricsUI(deployments);
-        renderActiveServicesSummary(deployments);
-      }
-    } catch (e) {
-      console.error("Failed to parse cached metrics:", e);
+  const cachedHistory = localStorage.getItem('mini_heroku_history_cache');
+  try {
+    let deployments = [];
+    let history = [];
+    if (cached) {
+      deployments = JSON.parse(cached);
+      updateMetricsUI(deployments);
+      renderActiveServicesSummary(deployments);
     }
+    if (cachedHistory) {
+      history = JSON.parse(cachedHistory);
+    }
+    if (deployments.length > 0 || history.length > 0) {
+      generateActivityTimeline(deployments, history);
+    }
+  } catch (e) {
+    console.error("Failed to parse cached metrics:", e);
   }
 }
 loadCachedMetrics();

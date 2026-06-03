@@ -39,6 +39,32 @@
   }
 })();
 
+
+// Dynamic routing URL helpers
+window.getAppUrl = function(appName) {
+  const hostname = window.location.hostname;
+  if (hostname === 'localhost' || hostname === '127.0.0.1') {
+    return `http://${appName}.localhost`;
+  }
+  const ipRegex = /^(\d{1,3}\.){3}\d{1,3}$/;
+  if (ipRegex.test(hostname)) {
+    return `http://${appName}.${hostname}.nip.io`;
+  }
+  return `http://${appName}.${hostname}`;
+};
+
+window.getAppUrlDisplay = function(appName) {
+  const hostname = window.location.hostname;
+  if (hostname === 'localhost' || hostname === '127.0.0.1') {
+    return `${appName}.localhost`;
+  }
+  const ipRegex = /^(\d{1,3}\.){3}\d{1,3}$/;
+  if (ipRegex.test(hostname)) {
+    return `${appName}.${hostname}.nip.io`;
+  }
+  return `${appName}.${hostname}`;
+};
+
 // Global session termination
 function handleUnauthorized() {
   localStorage.removeItem('mini_heroku_token');
