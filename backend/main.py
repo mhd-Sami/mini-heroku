@@ -90,6 +90,53 @@ def heal_container_network(client, container):
     except Exception as e:
         print(f"Warning: Failed to heal network for container {container.name}: {e}", flush=True)
 
+def recreate_container(deployment: Deployment, db: Session, client) -> docker.models.containers.Container:
+    app_name = deployment.app_name
+    # 1. Stop and remove old container
+    try:
+        old_container = client.containers.get(app_name)
+        try:
+            old_container.stop(timeout=5)
+        except Exception:
+            pass
+        old_container.remove()
+    except docker.errors.NotFound:
+        pass
+
+    # 2. Launch new container with new settings
+    route_name = re.sub(r'[^a-zA-Z0-9]', '', app_name)
+    custom_domain = deployment.custom_domain
+    rule = f'Host("{app_name}.localhost")'
+    if custom_domain:
+        rule += f' || Host("{custom_domain}")'
+
+    labels = {
+        "traefik.enable": "true",
+        "traefik.docker.network": "mini-heroku-net",
+        f"traefik.http.routers.{route_name}.rule": rule,
+        f"traefik.http.routers.{route_name}.entrypoints": "web",
+        f"traefik.http.services.{route_name}.loadbalancer.server.port": str(deployment.port)
+    }
+    nano_cpus = int(deployment.cpu_limit * 1e9) if deployment.cpu_limit else None
+    env_vars_dict = decrypt_env_vars(deployment.env_vars)
+
+    # Resolve latest build tag if exists, otherwise fallback to app_name
+    latest_build = db.query(Build).filter(Build.app_name == app_name, Build.status == "success").order_by(Build.created_at.desc()).first()
+    image_tag = latest_build.version_tag if latest_build else app_name
+
+    container = client.containers.run(
+        image=image_tag,
+        name=app_name,
+        detach=True,
+        network="mini-heroku-net",
+        labels=labels,
+        environment=env_vars_dict,
+        nano_cpus=nano_cpus,
+        mem_limit=deployment.memory_limit if deployment.memory_limit else None,
+        restart_policy={"Name": "on-failure"}
+    )
+    return container
+
 app = FastAPI(title="Mini-Heroku Orchestration API")
 app.include_router(auth_router)
 
@@ -730,7 +777,7 @@ def list_apps(db: Session = Depends(get_db), current_uid: str = Depends(get_curr
     
     # Query docker container statuses once to avoid loop-level API connections
     container_status_map = {}
-    if any(d.status == "running" and d.container_id for d in deployments):
+    if deployments:
         try:
             client = get_docker_client()
             containers = client.containers.list(all=True)
@@ -740,13 +787,21 @@ def list_apps(db: Session = Depends(get_db), current_uid: str = Depends(get_curr
             print(f"Error listing docker containers: {e}", flush=True)
 
     result = []
+    db_changed = False
     for d in deployments:
-        # Verify status against actual Docker container status if status is running
-        actual_status = d.status
-        if d.status == "running" and d.container_id:
-            c_status = container_status_map.get(d.app_name)
-            if c_status != "running":
-                actual_status = "stopped"
+        c_status = container_status_map.get(d.app_name)
+        if c_status == "running":
+            actual_status = "running"
+        elif c_status in ("exited", "created"):
+            actual_status = "stopped"
+        else:
+            # Container not found, status should be stopped if marked running
+            actual_status = "stopped" if d.status == "running" else d.status
+
+        # If database is out of sync, update it
+        if d.status != actual_status:
+            d.status = actual_status
+            db_changed = True
         
         result.append({
             "id": d.id,
@@ -764,6 +819,8 @@ def list_apps(db: Session = Depends(get_db), current_uid: str = Depends(get_curr
             "created_at": d.created_at.isoformat(),
             "custom_domain": d.custom_domain
         })
+    if db_changed:
+        db.commit()
     return result
 
 @app.post("/api/deploy")
@@ -863,16 +920,25 @@ def start_app(app_name: str, db: Session = Depends(get_db), current_uid: str = D
     
     try:
         client = get_docker_client()
-        container = client.containers.get(app_name)
-        heal_container_network(client, container)
-        container.start()
+        
+        # Verify first if we have any valid image to run
+        latest_build = db.query(Build).filter(Build.app_name == app_name, Build.status == "success").first()
+        if not latest_build:
+            try:
+                client.containers.get(app_name)
+            except docker.errors.NotFound:
+                raise HTTPException(status_code=400, detail="Container not found. Please trigger deployment again.")
+
+        container = recreate_container(deployment, db, client)
         deployment.status = "running"
+        deployment.container_id = container.id
         db.commit()
         log_message(app_name, "Application container started manually.")
-        send_realtime_event(deployment.user_id, "app_updated", serialize_deployment(deployment))
-        return {"status": "success", "message": f"App {app_name} started"}
-    except docker.errors.NotFound:
-        raise HTTPException(status_code=400, detail="Container not found. Please trigger deployment again.")
+        app_data = serialize_deployment(deployment)
+        send_realtime_event(deployment.user_id, "app_updated", app_data)
+        return {"status": "success", "message": f"App {app_name} started", "app": app_data}
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -896,13 +962,15 @@ def stop_app(app_name: str, db: Session = Depends(get_db), current_uid: str = De
         deployment.status = "stopped"
         db.commit()
         log_message(app_name, "Application container stopped manually.")
-        send_realtime_event(deployment.user_id, "app_updated", serialize_deployment(deployment))
-        return {"status": "success", "message": f"App {app_name} stopped"}
+        app_data = serialize_deployment(deployment)
+        send_realtime_event(deployment.user_id, "app_updated", app_data)
+        return {"status": "success", "message": f"App {app_name} stopped", "app": app_data}
     except docker.errors.NotFound:
         deployment.status = "stopped"
         db.commit()
-        send_realtime_event(deployment.user_id, "app_updated", serialize_deployment(deployment))
-        return {"status": "success", "message": f"Container not found, marked as stopped"}
+        app_data = serialize_deployment(deployment)
+        send_realtime_event(deployment.user_id, "app_updated", app_data)
+        return {"status": "success", "message": f"Container not found, marked as stopped", "app": app_data}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -921,16 +989,25 @@ def restart_app(app_name: str, db: Session = Depends(get_db), current_uid: str =
     
     try:
         client = get_docker_client()
-        container = client.containers.get(app_name)
-        heal_container_network(client, container)
-        container.restart()
+        
+        # Verify first if we have any valid image to run
+        latest_build = db.query(Build).filter(Build.app_name == app_name, Build.status == "success").first()
+        if not latest_build:
+            try:
+                client.containers.get(app_name)
+            except docker.errors.NotFound:
+                raise HTTPException(status_code=400, detail="Container not found. Please trigger deployment again.")
+
+        container = recreate_container(deployment, db, client)
         deployment.status = "running"
+        deployment.container_id = container.id
         db.commit()
         log_message(app_name, "Application container restarted manually.")
-        send_realtime_event(deployment.user_id, "app_updated", serialize_deployment(deployment))
-        return {"status": "success", "message": f"App {app_name} restarted"}
-    except docker.errors.NotFound:
-        raise HTTPException(status_code=400, detail="Container not found. Please trigger deployment again.")
+        app_data = serialize_deployment(deployment)
+        send_realtime_event(deployment.user_id, "app_updated", app_data)
+        return {"status": "success", "message": f"App {app_name} restarted", "app": app_data}
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -1041,43 +1118,7 @@ def configure_app(
     if deployment.status == "running":
         try:
             client = get_docker_client()
-            
-            # Stop and remove old container
-            try:
-                old_container = client.containers.get(app_name)
-                old_container.stop(timeout=5)
-                old_container.remove()
-            except docker.errors.NotFound:
-                pass
-
-            # Launch new container with new settings
-            route_name = re.sub(r'[^a-zA-Z0-9]', '', app_name)
-            custom_domain = deployment.custom_domain
-            rule = f'Host("{app_name}.localhost")'
-            if custom_domain:
-                rule += f' || Host("{custom_domain}")'
-
-            labels = {
-                "traefik.enable": "true",
-                "traefik.docker.network": "mini-heroku-net",
-                f"traefik.http.routers.{route_name}.rule": rule,
-                f"traefik.http.routers.{route_name}.entrypoints": "web",
-                f"traefik.http.services.{route_name}.loadbalancer.server.port": str(deployment.port)
-            }
-            nano_cpus = int(deployment.cpu_limit * 1e9) if deployment.cpu_limit else None
-            env_vars_dict = request.env_vars if request.env_vars is not None else decrypt_env_vars(deployment.env_vars)
-
-            container = client.containers.run(
-                image=app_name,
-                name=app_name,
-                detach=True,
-                network="mini-heroku-net",
-                labels=labels,
-                environment=env_vars_dict,
-                nano_cpus=nano_cpus,
-                mem_limit=deployment.memory_limit if deployment.memory_limit else None,
-                restart_policy={"Name": "on-failure"}
-            )
+            container = recreate_container(deployment, db, client)
             deployment.container_id = container.id
             db.commit()
             log_message(app_name, "Container recreated to apply updated configuration.")
@@ -1153,11 +1194,29 @@ def get_app_stats(app_name: str, db: Session = Depends(get_db), current_uid: str
         deployment.user_id = current_uid
         db.commit()
 
-    # Check memory cache first
-    cached = _app_stats_cache.get(app_name)
+    # Verify status first to ensure database is in sync with reality
+    actual_status = deployment.status
+    try:
+        client = get_docker_client()
+        container = client.containers.get(app_name)
+        if container.status == "running":
+            actual_status = "running"
+        elif container.status in ("exited", "created"):
+            actual_status = "stopped"
+    except docker.errors.NotFound:
+        actual_status = "stopped"
+    except Exception:
+        pass
+
+    if deployment.status != actual_status:
+        deployment.status = actual_status
+        db.commit()
+
+    # Check memory cache first if actual status is running
+    cached = _app_stats_cache.get(app_name) if actual_status == "running" else None
     if cached:
         res = {
-            "status": cached.get("status"),
+            "status": "running",
             "cpu_percent": cached.get("cpu_percent"),
             "memory_usage_mb": cached.get("memory_usage_mb"),
             "memory_limit_mb": cached.get("memory_limit_mb"),
@@ -1166,9 +1225,9 @@ def get_app_stats(app_name: str, db: Session = Depends(get_db), current_uid: str
     else:
         # Fallback / Default
         res = {}
-        if deployment.status != "running":
+        if actual_status != "running":
             res = {
-                "status": deployment.status, 
+                "status": actual_status, 
                 "cpu_percent": 0.0, 
                 "memory_usage_mb": 0.0, 
                 "memory_limit_mb": 0.0, 

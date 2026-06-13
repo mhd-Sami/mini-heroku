@@ -275,7 +275,11 @@ async function startApp(appName, btn) {
   }
   try {
     const res = await authFetch(`${API_BASE}/api/apps/${appName}/start`, { method: 'POST' });
-    if (!res.ok) throw new Error('Failed to start application');
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail || 'Failed to start application');
+    if (data.app && window.updateDeploymentsCache) {
+      window.updateDeploymentsCache(data.app);
+    }
     fetchDeployments();
   } catch (err) {
     alert(`Error starting app: ${err.message}`);
@@ -293,7 +297,11 @@ async function stopApp(appName, btn) {
   }
   try {
     const res = await authFetch(`${API_BASE}/api/apps/${appName}/stop`, { method: 'POST' });
-    if (!res.ok) throw new Error('Failed to stop application');
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail || 'Failed to stop application');
+    if (data.app && window.updateDeploymentsCache) {
+      window.updateDeploymentsCache(data.app);
+    }
     fetchDeployments();
   } catch (err) {
     alert(`Error stopping app: ${err.message}`);

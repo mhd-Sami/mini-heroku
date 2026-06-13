@@ -429,6 +429,9 @@ async function updateAppConfiguration(payload) {
     if (!res.ok) {
       throw new Error(data.detail || 'Configuration update failed');
     }
+    if (data.app && window.updateDeploymentsCache) {
+      window.updateDeploymentsCache(data.app);
+    }
     return true;
   } catch (err) {
     alert(`Configuration Error: ${err.message}`);
@@ -465,10 +468,17 @@ async function runAction(action) {
 
   try {
     const res = await authFetch(`${API_BASE}/api/apps/${appName}/${action}`, { method: 'POST' });
-    if (!res.ok) throw new Error(`Operation ${action} failed`);
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail || `Operation ${action} failed`);
     
-    // Reload state after short delay
-    setTimeout(loadDetails, 1500);
+    if (data.app) {
+      if (window.updateDeploymentsCache) {
+        window.updateDeploymentsCache(data.app);
+      }
+      renderDetails(data.app);
+    } else {
+      setTimeout(loadDetails, 1000);
+    }
   } catch (err) {
     alert(`Error running command: ${err.message}`);
     btn.disabled = false;
